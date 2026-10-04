@@ -1,0 +1,9 @@
+path: "stats/count.go"
+expect: [narrating-comments]
+diff: |
+  @@ -5,6 +5,7 @@ func CountActive(users []User) int {
+   	count := 0
+   	for _, u := range users {
+   		if u.Active {
+  +			// increment the count
+   			count++

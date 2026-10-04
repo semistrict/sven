@@ -1,0 +1,10 @@
+path: "web/src/orders-api.ts"
+expect: [unfinished]
+diff: |
+  @@ -1,5 +1,7 @@
+   export async function getOrders(userId: string): Promise<Order[]> {
+  -  return api.get(`/orders/${userId}`);
+  +  // Simulate API call
+  +  await new Promise((r) => setTimeout(r, 500));
+  +  return [{ id: "ord_1", total: 99.99, status: "shipped" }];
+   }

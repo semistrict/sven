@@ -1,0 +1,12 @@
+path: "web/src/notify.test.ts"
+expect: [low-value-test]
+why: "It only tests that jest.fn records calls."
+diff: |
+  @@ -0,0 +1,8 @@
+  +describe("notify", () => {
+  +  it("calls the callback", () => {
+  +    const callback = jest.fn();
+  +    callback("saved");
+  +    expect(callback).toHaveBeenCalledWith("saved");
+  +  });
+  +});

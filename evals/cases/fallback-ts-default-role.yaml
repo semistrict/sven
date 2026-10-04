@@ -1,0 +1,13 @@
+path: "web/src/auth.ts"
+expect: [silent-fallback, swallowed-error]
+diff: |
+  @@ -10,5 +10,9 @@ export async function roleOf(userId: string): Promise<Role> {
+  -  const res = await api.get(`/users/${userId}/role`);
+  -  return res.data.role;
+  +  try {
+  +    const res = await api.get(`/users/${userId}/role`);
+  +    return res.data.role;
+  +  } catch {
+  +    return "viewer";
+  +  }
+   }

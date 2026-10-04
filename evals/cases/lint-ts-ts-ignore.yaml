@@ -1,0 +1,8 @@
+path: "web/src/chart.ts"
+expect: [lint-suppression]
+diff: |
+  @@ -20,4 +20,5 @@ export function draw(series: Series[]) {
+     const chart = new Chart(canvas);
+  +  // @ts-ignore
+     chart.plot(series, { smooth: "yes" });
+   }

@@ -1,0 +1,5 @@
+# A single generic rule instead of the built-ins.
+inherit_rules: false
+rules:
+  - id: sus
+    question: Is something in `diff` sus for some unspecified reason?

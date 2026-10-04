@@ -1,0 +1,11 @@
+path: "net/retry.go"
+expect: []
+why: "The comment explains why, which the code can't say."
+diff: |
+  @@ -12,6 +12,8 @@ func (c *Client) Do(req *http.Request) (*http.Response, error) {
+   	resp, err := c.http.Do(req)
+   	if errors.Is(err, io.EOF) {
+  +		// The upstream proxy drops the first request on a connection that sat
+  +		// idle past its timeout, so one retry is expected and safe.
+   		resp, err = c.http.Do(req)
+   	}

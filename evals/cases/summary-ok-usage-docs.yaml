@@ -1,0 +1,10 @@
+path: "docs/export.md"
+expect: []
+diff: |
+  @@ -0,0 +1,8 @@
+  +# Exporting reports
+  +
+  +Run `report export --format csv` to write the current month's report to
+  +standard output. Use `--month 2026-09` for an earlier month.
+  +
+  +CSV exports include one row per invoice. Amounts are in cents.

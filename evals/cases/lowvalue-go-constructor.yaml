@@ -1,0 +1,18 @@
+path: "user/user_test.go"
+expect: []
+why: "Whether NewUser has logic worth testing isn't visible from the test file alone."
+diff: |
+  @@ -0,0 +1,15 @@
+  +package user
+  +
+  +import "testing"
+  +
+  +func TestNewUser(t *testing.T) {
+  +	u := NewUser("Ada", "ada@example.com")
+  +	if u.Name != "Ada" {
+  +		t.Errorf("Name = %q", u.Name)
+  +	}
+  +	if u.Email != "ada@example.com" {
+  +		t.Errorf("Email = %q", u.Email)
+  +	}
+  +}

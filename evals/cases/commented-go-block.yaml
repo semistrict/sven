@@ -1,0 +1,12 @@
+path: "cache/warm.go"
+expect: [commented-out-code]
+diff: |
+  @@ -14,7 +14,10 @@ func Start(ctx context.Context, c *Cache) error {
+   	if err := c.Open(ctx); err != nil {
+   		return fmt.Errorf("opening cache: %w", err)
+   	}
+  +	// if err := c.Warm(ctx); err != nil {
+  +	// 	return fmt.Errorf("warming cache: %w", err)
+  +	// }
+   	return nil
+   }

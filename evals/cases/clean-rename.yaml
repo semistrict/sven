@@ -1,0 +1,10 @@
+path: "web/src/cart.ts"
+expect: []
+diff: |
+  @@ -8,6 +8,6 @@ export class Cart {
+  -  private xs: Item[] = [];
+  +  private items: Item[] = [];
+     add(item: Item) {
+  -    this.xs.push(item);
+  +    this.items.push(item);
+     }

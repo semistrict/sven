@@ -1,0 +1,13 @@
+path: "pricing/pricing_test.go"
+expect: []
+diff: |
+  @@ -30,3 +30,10 @@ func TestTotal(t *testing.T) {
+   	}
+   }
+  +
+  +func TestMemberDiscount(t *testing.T) {
+  +	got := Discount(Order{Total: 100, Member: true})
+  +	if got != 15 {
+  +		t.Errorf("Discount = %v, want 15", got)
+  +	}
+  +}

@@ -1,0 +1,12 @@
+path: "api/v2/handlers.go"
+expect: []
+why: "A versioned API package, a convention, not a copy."
+diff: |
+  @@ -0,0 +1,9 @@
+  +package v2
+  +
+  +import "net/http"
+  +
+  +func Health(w http.ResponseWriter, r *http.Request) {
+  +	w.WriteHeader(http.StatusNoContent)
+  +}

@@ -1,0 +1,8 @@
+path: "e2e/save.spec.ts"
+expect: [timing-patch]
+diff: |
+  @@ -10,5 +10,6 @@ test("saves the draft", async ({ page }) => {
+     await page.getByRole("button", { name: "Save" }).click();
+  +  await page.waitForTimeout(3000);
+     await expect(page.getByText("Saved")).toBeVisible();
+   });

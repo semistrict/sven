@@ -1,0 +1,19 @@
+path: "billing/clock.go"
+expect: []
+why: "Two implementations, with a stated reason."
+diff: |
+  @@ -0,0 +1,14 @@
+  +package billing
+  +
+  +import "time"
+  +
+  +// Clock lets invoices be generated for a fixed time in tests and replays.
+  +type Clock interface {
+  +	Now() time.Time
+  +}
+  +
+  +type systemClock struct{}
+  +
+  +func (systemClock) Now() time.Time { return time.Now() }
+  +
+  +type fixedClock time.Time

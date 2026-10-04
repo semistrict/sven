@@ -1,0 +1,22 @@
+path: "text/slug_test.go"
+expect: []
+why: "Specific expected outputs, including edge cases."
+diff: |
+  @@ -0,0 +1,19 @@
+  +package text
+  +
+  +import "testing"
+  +
+  +func TestSlugify(t *testing.T) {
+  +	for _, tc := range []struct{ in, want string }{
+  +		{"Hello World", "hello-world"},
+  +		{"  padded  ", "padded"},
+  +		{"Ünïcödé", "unicode"},
+  +		{"a--b", "a-b"},
+  +		{"", ""},
+  +	} {
+  +		if got := Slugify(tc.in); got != tc.want {
+  +			t.Errorf("Slugify(%q) = %q, want %q", tc.in, got, tc.want)
+  +		}
+  +	}
+  +}

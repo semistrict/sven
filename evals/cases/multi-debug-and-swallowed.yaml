@@ -1,0 +1,12 @@
+path: "sync/pull.go"
+expect: [debug-leftovers, swallowed-error]
+diff: |
+  @@ -20,6 +20,8 @@ func Pull(ctx context.Context, remote string) error {
+   	items, err := fetch(ctx, remote)
+   	if err != nil {
+   		return err
+   	}
+  +	fmt.Println("items:", len(items))
+  +	_ = saveAll(ctx, items)
+   	return nil
+   }

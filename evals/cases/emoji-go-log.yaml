@@ -1,0 +1,9 @@
+path: "server/main.go"
+expect: [emoji]
+diff: |
+  @@ -40,5 +40,6 @@ func main() {
+   	srv := &http.Server{Addr: addr, Handler: mux}
+  +	slog.Info("🚀 server started", "addr", addr)
+   	if err := srv.ListenAndServe(); err != nil {
+   		log.Fatal(err)
+   	}

@@ -1,0 +1,7 @@
+path: "tests/test_pricing.py"
+expect: [weakened-tests, low-value-test]
+diff: |
+  @@ -9,4 +9,4 @@ def test_member_discount():
+       order = make_order(total=100, member=True)
+  -    assert discount(order) == 15
+  +    assert discount(order) is not None

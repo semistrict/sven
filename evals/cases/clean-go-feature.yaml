@@ -1,0 +1,17 @@
+path: "stats/median.go"
+expect: []
+diff: |
+  @@ -0,0 +1,13 @@
+  +package stats
+  +
+  +import "slices"
+  +
+  +func Median(xs []float64) float64 {
+  +	s := slices.Clone(xs)
+  +	slices.Sort(s)
+  +	n := len(s)
+  +	if n%2 == 1 {
+  +		return s[n/2]
+  +	}
+  +	return (s[n/2-1] + s[n/2]) / 2
+  +}

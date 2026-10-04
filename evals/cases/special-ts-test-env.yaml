@@ -1,0 +1,10 @@
+path: "server/src/token.ts"
+expect: [test-special-casing]
+diff: |
+  @@ -3,5 +3,8 @@ import jwt from "jsonwebtoken";
+   export function verifyToken(token: string): boolean {
+  +  if (process.env.NODE_ENV === "test") {
+  +    return true;
+  +  }
+     return jwt.verify(token, secret()) !== null;
+   }

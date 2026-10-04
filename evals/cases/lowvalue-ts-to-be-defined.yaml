@@ -1,0 +1,11 @@
+path: "web/src/date.test.ts"
+expect: [low-value-test]
+diff: |
+  @@ -0,0 +1,7 @@
+  +import { parseDate } from "./date";
+  +
+  +describe("parseDate", () => {
+  +  it("parses a date", () => {
+  +    expect(parseDate("2026-10-03")).toBeDefined();
+  +  });
+  +});

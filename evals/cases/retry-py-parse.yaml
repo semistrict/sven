@@ -1,0 +1,11 @@
+path: "config/load.py"
+expect: [blanket-retry, swallowed-error]
+why: "Parsing the same text fails the same way every time."
+diff: |
+  @@ -9,3 +9,8 @@ def load(text):
+  -    return parse_config(text)
+  +    for attempt in range(5):
+  +        try:
+  +            return parse_config(text)
+  +        except Exception:
+  +            time.sleep(2 ** attempt)

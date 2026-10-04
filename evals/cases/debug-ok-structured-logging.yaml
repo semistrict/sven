@@ -1,0 +1,11 @@
+path: "server/auth.go"
+expect: []
+why: "Deliberate structured logging is permanent, not debugging."
+diff: |
+  @@ -58,6 +58,7 @@ func (s *Server) signIn(ctx context.Context, u *User) error {
+   	if err := s.sessions.Create(ctx, u.ID); err != nil {
+   		return fmt.Errorf("creating session: %w", err)
+   	}
+  +	slog.InfoContext(ctx, "user signed in", "user_id", u.ID)
+   	return nil
+   }

@@ -1,0 +1,9 @@
+path: "web/src/list2.ts"
+expect: []
+diff: |
+  @@ -4,5 +4,6 @@ export function onClick(evt: MouseEvent) {
+  -  const id = evt.target.dataset.id;
+  +  if (!(evt.target instanceof HTMLElement)) return;
+  +  const id = evt.target.dataset.id;
+     select(id);
+   }

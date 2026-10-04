@@ -1,0 +1,6 @@
+- id: sven
+  name: sven
+  description: Vibe checks your commits at the door with a System One model.
+  entry: sven check --cached
+  language: golang
+  stages: [pre-commit]

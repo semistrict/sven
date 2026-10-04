@@ -1,0 +1,9 @@
+path: "net/jitter.go"
+expect: []
+why: "The suppression names the rule and says why it doesn't apply."
+diff: |
+  @@ -9,5 +9,6 @@ import "math/rand/v2"
+   func jitter(d time.Duration) time.Duration {
+  +	//nolint:gosec // G404: jitter needs spread, not unpredictability.
+   	return d/2 + rand.N(d/2)
+   }

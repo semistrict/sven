@@ -1,0 +1,10 @@
+path: "server/src/users.ts"
+expect: [narrating-comments]
+diff: |
+  @@ -4,4 +4,8 @@ export async function deactivate(id: string) {
+  +  // Step 1: Get the user from the database
+     const user = await db.users.find(id);
+  +  // Step 2: Check if user exists
+     if (!user) throw new NotFound();
+  +  // Step 3: Update the status
+     await db.users.update(id, { active: false });

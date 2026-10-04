@@ -1,0 +1,16 @@
+path: "client/fetch.go"
+expect: []
+why: "A bounded retry of an idempotent GET on rate limits only."
+diff: |
+  @@ -20,6 +20,13 @@ func (c *Client) get(ctx context.Context, url string) (*http.Response, error) {
+  -	return c.http.Do(req)
+  +	for attempt := range 3 {
+  +		resp, err := c.http.Do(req)
+  +		if err != nil || (resp.StatusCode != http.StatusTooManyRequests && resp.StatusCode != http.StatusServiceUnavailable) {
+  +			return resp, err
+  +		}
+  +		resp.Body.Close()
+  +		time.Sleep(time.Duration(attempt+1) * time.Second)
+  +	}
+  +	return nil, errors.New("still rate limited after 3 attempts")
+   }

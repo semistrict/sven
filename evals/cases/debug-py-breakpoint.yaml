@@ -1,0 +1,8 @@
+path: "billing/invoice.py"
+expect: [debug-leftovers]
+diff: |
+  @@ -27,6 +27,7 @@ def total(invoice):
+       subtotal = sum(line.amount for line in invoice.lines)
+  +    breakpoint()
+       tax = subtotal * invoice.tax_rate
+       return subtotal + tax

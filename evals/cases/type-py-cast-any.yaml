@@ -1,0 +1,6 @@
+path: "billing/stripe_sync.py"
+expect: [type-escape]
+diff: |
+  @@ -9,4 +9,4 @@ def customer_id(resp: Response) -> str:
+  -    return resp.json()["customer"]["id"]
+  +    return cast(Any, resp).json()["customer"]["id"]

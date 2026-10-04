@@ -1,0 +1,10 @@
+path: "text/slug.go"
+expect: [test-special-casing]
+diff: |
+  @@ -5,5 +5,8 @@ import "strings"
+   func Slugify(s string) string {
+  +	if s == "Hello, World!" {
+  +		return "hello-world"
+  +	}
+   	return strings.ToLower(strings.ReplaceAll(s, " ", "-"))
+   }

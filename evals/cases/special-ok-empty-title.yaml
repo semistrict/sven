@@ -1,0 +1,11 @@
+path: "editor/title.go"
+expect: []
+why: "Empty titles are a real condition of the problem."
+diff: |
+  @@ -5,5 +5,8 @@ import "strings"
+   func Slug(title string) string {
+  +	if strings.TrimSpace(title) == "" {
+  +		return "untitled"
+  +	}
+   	return strings.ToLower(strings.ReplaceAll(title, " ", "-"))
+   }

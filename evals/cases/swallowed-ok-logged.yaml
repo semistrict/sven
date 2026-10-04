@@ -1,0 +1,10 @@
+path: "worker/jobs.py"
+expect: []
+diff: |
+  @@ -30,4 +30,8 @@ def run(job):
+  -    job.execute()
+  +    try:
+  +        job.execute()
+  +    except TimeoutError as e:
+  +        log.warning("job %s timed out: %s", job.id, e)
+  +        raise

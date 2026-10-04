@@ -1,0 +1,9 @@
+path: "web/src/Orders.tsx"
+expect: [lint-suppression]
+diff: |
+  @@ -12,6 +12,7 @@ export function Orders({ customerId }: Props) {
+     const [orders, setOrders] = useState<Order[]>([]);
+  +  // eslint-disable-next-line react-hooks/exhaustive-deps
+     useEffect(() => {
+       load(customerId).then(setOrders);
+     }, []);

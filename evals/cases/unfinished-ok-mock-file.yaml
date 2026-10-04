@@ -1,0 +1,8 @@
+path: "web/src/__mocks__/orders-api.ts"
+expect: []
+why: "Sample data in a mocks directory is the point of the file."
+diff: |
+  @@ -0,0 +1,3 @@
+  +export async function getOrders(): Promise<Order[]> {
+  +  return [{ id: "ord_1", total: 99.99, status: "shipped" }];
+  +}

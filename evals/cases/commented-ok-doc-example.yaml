@@ -1,0 +1,13 @@
+path: "client/client.go"
+expect: []
+why: "A usage example in a doc comment is documentation, not disabled code."
+diff: |
+  @@ -1,6 +1,12 @@
+  -// Package client talks to the inventory service.
+  +// Package client talks to the inventory service.
+  +//
+  +// A typical call looks like this:
+  +//
+  +//	c := client.New(baseURL)
+  +//	items, err := c.List(ctx)
+   package client

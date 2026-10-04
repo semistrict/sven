@@ -1,0 +1,14 @@
+path: "server/src/billing.ts"
+expect: [blanket-retry]
+why: "Charging again without an idempotency key can bill twice."
+diff: |
+  @@ -14,5 +14,12 @@ export async function charge(customer: string, cents: number) {
+  -  return stripe.charges.create({ customer, amount: cents, currency: "usd" });
+  +  for (let i = 0; i < 3; i++) {
+  +    try {
+  +      return await stripe.charges.create({ customer, amount: cents, currency: "usd" });
+  +    } catch (err) {
+  +      if (i === 2) throw err;
+  +    }
+  +  }
+   }

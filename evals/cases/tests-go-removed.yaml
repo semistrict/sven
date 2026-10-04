@@ -1,0 +1,11 @@
+path: "auth/auth_test.go"
+expect: [weakened-tests]
+diff: |
+  @@ -40,8 +40,0 @@ func TestLogin(t *testing.T) {
+  -func TestLoginRejectsWrongPassword(t *testing.T) {
+  -	s := newServer(t)
+  -	err := s.Login(t.Context(), "sven@example.com", "wrong")
+  -	if !errors.Is(err, errBadCredentials) {
+  -		t.Fatalf("err = %v, want errBadCredentials", err)
+  -	}
+  -}

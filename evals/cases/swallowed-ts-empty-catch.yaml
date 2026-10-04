@@ -1,0 +1,10 @@
+path: "web/src/prefs.ts"
+expect: [swallowed-error]
+diff: |
+  @@ -3,5 +3,9 @@ export function savePrefs(prefs: Prefs) {
+  -  localStorage.setItem("prefs", JSON.stringify(prefs));
+  +  try {
+  +    localStorage.setItem("prefs", JSON.stringify(prefs));
+  +  } catch (e) {
+  +  }
+   }

@@ -1,0 +1,11 @@
+path: "web/src/users.ts"
+expect: [compat-shim]
+diff: |
+  @@ -3,6 +3,9 @@ import { api } from "./api";
+  -export async function fetchUser(id: string) {
+  +export async function fetchUserV2(id: string) {
+     return (await api.get(`/v2/users/${id}`)).data;
+   }
+  +
+  +/** @deprecated use fetchUserV2 */
+  +export const fetchUser = fetchUserV2; // backwards compatibility

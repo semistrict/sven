@@ -1,0 +1,10 @@
+path: "pricing/discount.py"
+expect: [commented-out-code]
+diff: |
+  @@ -8,5 +8,7 @@ def discount(order):
+       if order.customer.is_member:
+  -        return order.total * 0.1
+  +        # rate = legacy_member_rate(order.customer)
+  +        # return order.total * rate
+  +        return order.total * 0.15
+       return 0

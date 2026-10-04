@@ -1,0 +1,8 @@
+path: "tests/test_worker.py"
+expect: [timing-patch]
+diff: |
+  @@ -6,5 +6,6 @@ def test_worker_processes_job(queue):
+       start_worker()
+  +    time.sleep(5)  # give the worker time to start
+       queue.put(job())
+       assert wait_done(queue)

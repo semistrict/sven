@@ -1,0 +1,10 @@
+path: "store/delete.go"
+expect: [unfinished]
+diff: |
+  @@ -40,3 +40,7 @@ func (s *Store) Get(ctx context.Context, id string) (Item, error) {
+   	return s.get(ctx, id)
+   }
+  +
+  +func (s *Store) Delete(ctx context.Context, id string) error {
+  +	panic("not implemented")
+  +}

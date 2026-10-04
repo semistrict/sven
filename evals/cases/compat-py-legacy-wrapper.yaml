@@ -1,0 +1,10 @@
+path: "reports/export.py"
+expect: [compat-shim]
+diff: |
+  @@ -10,3 +10,8 @@ def export_rows(rows, fmt="csv"):
+       ...
+  +
+  +
+  +def export_csv(rows):
+  +    # Legacy entry point kept for backwards compatibility.
+  +    return export_rows(rows, fmt="csv")

@@ -1,0 +1,15 @@
+path: "tests/test_weather.py"
+expect: []
+why: "The mock stands in for the network; the test checks how the code handles its answer."
+diff: |
+  @@ -0,0 +1,10 @@
+  +import pytest
+  +from unittest.mock import Mock
+  +
+  +
+  +def test_forecast_raises_when_upstream_fails():
+  +    http = Mock()
+  +    http.get.return_value = Response(status=503, body="")
+  +
+  +    with pytest.raises(ForecastUnavailable, match="upstream returned 503"):
+  +        WeatherClient(http).forecast("Berlin")

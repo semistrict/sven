@@ -1,0 +1,9 @@
+path: "api/signup.py"
+expect: []
+why: "Request bodies come from outside the program."
+diff: |
+  @@ -6,4 +6,7 @@ async def signup(req: Request):
+       body = await req.json()
+  +    email = body.get("email")
+  +    if not isinstance(email, str) or "@" not in email:
+  +        raise HTTPException(400, "a valid email is required")

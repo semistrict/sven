@@ -1,0 +1,10 @@
+path: "e2e/publish.spec.ts"
+expect: []
+why: "Replaces a fixed sleep with a wait for the condition."
+diff: |
+  @@ -10,5 +10,5 @@ test("publishes the post", async ({ page }) => {
+     await page.getByRole("button", { name: "Publish" }).click();
+  -  await page.waitForTimeout(3000);
+  -  expect(await page.getByText("Published").isVisible()).toBe(true);
+  +  await expect(page.getByText("Published")).toBeVisible();
+   });

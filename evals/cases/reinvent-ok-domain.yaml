@@ -1,0 +1,12 @@
+path: "inventory/sku.go"
+expect: []
+diff: |
+  @@ -0,0 +1,9 @@
+  +package inventory
+  +
+  +import "strings"
+  +
+  +// NormalizeSKU accepts SKUs as printed on labels: lower case, with spaces.
+  +func NormalizeSKU(s string) string {
+  +	return strings.ToUpper(strings.ReplaceAll(strings.TrimSpace(s), " ", "-"))
+  +}

@@ -1,0 +1,168 @@
+# sven vibe checks your commits at the door.
+#
+# These are the built-in settings. A .sven.yaml at the work tree root, and in
+# any directory below it, layers on top for the files in its directory and
+# beneath: rules merge by id, the closest definition replacing the whole rule
+# (`disabled: true` turns one off); the closest error and warn win; exclude
+# patterns add up, each relative to the directory of its .sven.yaml. Provider
+# and model can only be set at the root.
+#
+# Each rule is a yes/no question a System One model answers about every
+# changed file. If the probability of "yes" reaches the rule's error
+# threshold, the commit is turned away; if it only reaches warn, it's
+# reported and let in. Phrase it so that "yes" means the change breaks the rule, and
+# say exactly what you mean: the model reads questions literally. It sees two
+# fields, `path` and `diff`, the file's unified diff, where lines starting
+# with "+" are added and lines starting with "-" are removed.
+
+# typesafe: TypeSafe Jev, needs TYPESAFE_API_KEY.
+# cloudflare: Cloudflare Clef, needs CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN.
+provider: typesafe
+
+# Defaults to jev-latest for typesafe and clef-flash for cloudflare.
+# model: jev-latest
+
+# Default thresholds for rules that don't set their own: a probability from
+# 0 to 1, or off.
+error: 0.5
+warn: off
+
+# Git pathspec globs to skip. "*" stops at "/"; "**" crosses directories.
+exclude:
+  - "**/.sven.yaml"
+  - "**/go.sum"
+  - "**/*.lock"
+  - "**/package-lock.json"
+  - "**/pnpm-lock.yaml"
+  - "**/vendor/**"
+  - "**/node_modules/**"
+
+rules:
+  - id: debug-leftovers
+    question: Do the lines added in `diff` include leftover debugging code, such as temporary print or log statements or debugger breakpoints?
+    violation: Added lines contain temporary debugging code that was not meant to be committed.
+    ok: Added lines contain no debugging leftovers. Deliberate, permanent logging is fine.
+
+  - id: commented-out-code
+    question: Do the lines added in `diff` include commented-out code?
+    violation: Added lines contain source code disabled by turning it into comments.
+    ok: Added comments are prose, documentation, or examples, not disabled code.
+
+  - id: hardcoded-secret
+    question: Do the lines added in `diff` contain a real secret, such as an API key, password, private key, or access token?
+    violation: A credential is written directly into the file.
+    ok: No credentials, or only obvious placeholders and references to environment variables.
+
+  - id: swallowed-error
+    question: Does the code added in `diff` receive an error and then ignore it without handling, returning, or logging it?
+    violation: An error is silently discarded.
+    ok: Every error the added code receives is handled, returned, or logged.
+
+  - id: unfinished
+    question: Do the lines added in `diff` contain an explicit placeholder for missing work, such as a TODO or "implement later" comment, a function that only raises NotImplementedError or panics with "not implemented", a comment like "in a real implementation", or a simulated call that returns made-up data?
+    violation: Added code openly stands in for work still to be done.
+    ok: Short or simple code is fine when it does its job. Sample data in test, fixture, or mock files is fine.
+
+  - id: weakened-tests
+    error: off
+    warn: 0.5
+    question: Does `diff` skip, disable, or remove tests, or weaken test assertions so they pass more easily?
+    violation: Tests are skipped, disabled, removed, or made weaker.
+    ok: Tests are unchanged, added, or made stricter.
+
+  - id: low-value-test
+    error: off
+    warn: 0.5
+    question: Do the test functions added in `diff` only assert things the test itself guarantees, such as that a result exists, that a mock returns or receives what the test set it up with, or that a constant has its value, or compute the expected value with a formula instead of stating it?
+    violation: "The added tests can't catch a bug: they check what the test set up, or recompute the answer instead of stating it."
+    ok: Added tests compare results to stated expected values for meaningful inputs, edge cases, or errors. Changes that add no test functions do not apply.
+
+  - id: narrating-comments
+    question: Do the comments added in `diff` merely restate what the code does or narrate the edit, such as "increment i" or "changed this to fix the bug"?
+    violation: Added comments repeat the code or describe the edit instead of explaining why.
+    ok: Added comments explain intent or context, or no comments are added.
+
+  - id: silent-fallback
+    question: Does the code added in `diff` catch an error or exception and return a default or empty value instead, such as an empty list, None, zero, or a placeholder, so the caller can't tell the operation failed?
+    violation: A failed operation is turned into a normal-looking result.
+    ok: Errors are returned, raised, or reported. Defaults for optional values, and for expected cases such as a cache miss or a missing config file, are fine.
+
+  - id: test-special-casing
+    question: Does the code added in `diff` compare its input against a specific value taken from a test, such as an exact string or number, or check whether it is running under test, in order to return the answer the test expects?
+    violation: Production code recognizes test inputs instead of solving the problem.
+    ok: Special cases handle real conditions of the problem, such as empty input. Stubs and sample data that ignore their input are a different problem, as are mock and fixture files.
+
+  # Warnings: worth a look, not worth blocking a commit.
+
+  - id: type-escape
+    error: off
+    warn: 0.5
+    question: Do the lines added in `diff` silence the type checker with casts like `as any` or `as unknown as`, non-null assertions, `cast(Any, ...)`, or by widening a type to any?
+    violation: A type error is hidden instead of fixed.
+    ok: Types are narrowed with real checks, or no casts are added.
+
+  - id: lint-suppression
+    error: off
+    warn: 0.5
+    question: 'Do the lines added in `diff` suppress a linter or type checker, such as eslint-disable, @ts-ignore, "# type: ignore", "# noqa", or "//nolint", without naming a concrete reason?'
+    violation: A warning is silenced instead of addressed.
+    ok: No suppressions are added, or each one names the rule and gives a concrete reason.
+
+  - id: emoji
+    error: off
+    warn: 0.5
+    question: Do the lines added in `diff` put emoji in log messages, printed output, or comments?
+    violation: Emoji decorate logs, output, or comments.
+    ok: No emoji, or emoji only as data, such as a list of reactions or translated text.
+
+  - id: timing-patch
+    error: off
+    warn: 0.5
+    question: Does `diff` add a fixed sleep, or raise a timeout, so that a test or a startup race stops failing, instead of waiting for the condition it needs?
+    violation: A timing problem is papered over with a longer wait.
+    ok: Waits poll for a condition with a deadline. Backoff delays between retries are a different matter.
+
+  - id: blanket-retry
+    error: off
+    warn: 0.5
+    question: Does `diff` add a retry loop around an operation that will fail the same way every time, or that is not safe to repeat?
+    violation: Retries hide a persistent error or repeat a side effect.
+    ok: Retries are limited to transient failures, such as timeouts or rate limits, of operations safe to repeat.
+
+  - id: compat-shim
+    error: off
+    warn: 0.5
+    question: Does `diff` keep an old name or code path alive next to its replacement, such as a deprecated alias, a re-export, or a legacy wrapper kept for backwards compatibility?
+    violation: Old and new versions of the same thing are both kept.
+    ok: Code is changed in place, with no aliases or wrappers for the old version.
+
+  - id: reinvented-helper
+    error: off
+    warn: 0.5
+    question: Does `diff` add a function that reimplements something the language's standard library already provides, such as checking whether a list contains a value, splitting a list into chunks, or deep copying?
+    violation: Standard library functionality is written out by hand.
+    ok: New functions do something the standard library doesn't.
+
+  - id: work-summary
+    error: off
+    warn: 0.5
+    question: Does `diff` add a document that narrates the work done in this change, such as an implementation summary, fix report, or list of what was changed, rather than documentation the code's users need?
+    violation: A report about the change is committed as a file.
+    ok: Documentation describes how to use or maintain the code, or a changelog entry follows the project's format.
+
+  - id: versioned-copy
+    error: off
+    warn: 0.5
+    question: Is `path` a new parallel copy of another file, named with a marker such as _v2, _new, _fixed, _final, enhanced_, or improved_?
+    violation: A second version of a file is added next to the original.
+    ok: The file is edited in place, or the name follows an existing versioning convention such as api/v2/.
+
+  # A catch-all for everything the rules above don't name: warn on a hunch,
+  # reject only when sure.
+
+  - id: sus
+    error: 0.95
+    warn: 0.7
+    question: Would a careful senior engineer reviewing `diff` ask for changes before it is merged?
+    violation: Something in the change is sloppy, risky, unfinished, or not meant to be committed.
+    ok: The change is clean and ready to merge.

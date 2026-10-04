@@ -1,0 +1,12 @@
+path: "store/save.go"
+expect: [swallowed-error, silent-fallback]
+why: "Returning nil on failure hides the error from the caller."
+diff: |
+  @@ -20,6 +20,9 @@ func (s *Store) Save(ctx context.Context, item Item) error {
+   	row := toRow(item)
+  -	return s.db.Insert(ctx, row)
+  +	if err := s.db.Insert(ctx, row); err != nil {
+  +		return nil
+  +	}
+  +	return nil
+   }

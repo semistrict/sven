@@ -1,0 +1,10 @@
+path: "server/server_test.go"
+expect: [timing-patch]
+diff: |
+  @@ -14,7 +14,8 @@ func TestServe(t *testing.T) {
+   	go serve(addr)
+  -	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+  +	time.Sleep(500 * time.Millisecond)
+  +	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+   	defer cancel()
+   	resp, err := get(ctx, addr)

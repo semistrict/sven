@@ -1,0 +1,10 @@
+path: "web/src/client.ts"
+expect: [narrating-comments]
+diff: |
+  @@ -1,5 +1,5 @@
+  -import axios from "axios";
+  +// Changed this to use fetch instead of axios to fix the bug
+   export async function get(url: string) {
+  -  return (await axios.get(url)).data;
+  +  return (await fetch(url)).json();
+   }

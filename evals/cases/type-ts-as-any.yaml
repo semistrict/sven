@@ -1,0 +1,8 @@
+path: "web/src/list.ts"
+expect: [type-escape]
+diff: |
+  @@ -4,5 +4,5 @@ export function onClick(evt: MouseEvent) {
+  -  const id = evt.target.dataset.id;
+  +  const id = (evt as any).target.dataset.id;
+     select(id);
+   }

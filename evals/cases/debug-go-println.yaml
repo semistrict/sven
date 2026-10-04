@@ -1,0 +1,11 @@
+path: "server/handler.go"
+expect: [debug-leftovers]
+diff: |
+  @@ -41,6 +41,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
+   	user, err := h.store.FindUser(r.Context(), req.Email)
+   	if err != nil {
+   		return fmt.Errorf("finding user: %w", err)
+   	}
+  +	fmt.Println("got here", user)
+   	if !user.CheckPassword(req.Password) {
+   		return errBadCredentials

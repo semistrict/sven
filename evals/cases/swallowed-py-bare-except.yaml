@@ -1,0 +1,10 @@
+path: "notify/send.py"
+expect: [swallowed-error]
+diff: |
+  @@ -14,5 +14,8 @@ def notify(user, message):
+       msg = render(message, user)
+  -    mailer.send(user.email, msg)
+  +    try:
+  +        mailer.send(user.email, msg)
+  +    except Exception:
+  +        pass

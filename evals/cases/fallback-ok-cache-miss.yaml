@@ -1,0 +1,12 @@
+path: "build/cache.py"
+expect: []
+why: "A cache miss is an expected case, documented, and narrowly caught."
+diff: |
+  @@ -20,3 +20,8 @@ def cached_result(key):
+       path = cache_dir / f"{key}.json"
+  -    return json.loads(path.read_text())
+  +    try:
+  +        return json.loads(path.read_text())
+  +    except FileNotFoundError:
+  +        # A cache miss is normal: the caller computes the result and stores it.
+  +        return None

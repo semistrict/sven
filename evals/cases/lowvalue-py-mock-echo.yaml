@@ -1,0 +1,14 @@
+path: "tests/test_user_service.py"
+expect: [low-value-test]
+why: "The assertion is exactly what the mock was told to return."
+diff: |
+  @@ -0,0 +1,9 @@
+  +from unittest.mock import Mock
+  +
+  +
+  +def test_get_user_returns_user():
+  +    repo = Mock()
+  +    repo.find.return_value = {"id": 1, "name": "Ada"}
+  +    service = UserService(repo)
+  +
+  +    assert service.get_user(1) == {"id": 1, "name": "Ada"}

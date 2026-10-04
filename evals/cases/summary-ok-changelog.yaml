@@ -1,0 +1,14 @@
+path: "CHANGELOG.md"
+expect: []
+why: "A changelog entry in the project's existing format."
+diff: |
+  @@ -1,5 +1,9 @@
+   # Changelog
+   
+  +## Unreleased
+  +
+  +- Fix logout redirecting to the login page instead of the home page.
+  +
+   ## 1.4.0
+   
+   - Add CSV export.

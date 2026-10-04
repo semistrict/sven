@@ -1,0 +1,10 @@
+path: "shop/price.go"
+expect: [silent-fallback, swallowed-error]
+diff: |
+  @@ -12,6 +12,9 @@ func (s *Shop) Price(sku string) int {
+   	p, err := s.catalog.Lookup(sku)
+  +	if err != nil {
+  +		return 0
+  +	}
+   	return p.Cents
+   }

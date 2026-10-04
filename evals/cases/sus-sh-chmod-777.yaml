@@ -1,0 +1,7 @@
+path: "deploy/setup.sh"
+expect: [sus]
+diff: |
+  @@ -8,4 +8,5 @@ cp -r build/* /var/www/app/
+   chown -R www-data:www-data /var/www/app
+  +chmod -R 777 /var/www/app
+   systemctl restart app

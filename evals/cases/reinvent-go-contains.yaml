@@ -1,0 +1,16 @@
+path: "auth/roles.go"
+expect: [reinvented-helper]
+why: "slices.Contains does this."
+diff: |
+  @@ -20,3 +20,12 @@ func (u User) IsAdmin() bool {
+   	return contains(u.Roles, "admin")
+   }
+  +
+  +func contains(xs []string, s string) bool {
+  +	for _, x := range xs {
+  +		if x == s {
+  +			return true
+  +		}
+  +	}
+  +	return false
+  +}

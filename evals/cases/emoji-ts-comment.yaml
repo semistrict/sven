@@ -1,0 +1,8 @@
+path: "web/src/render.ts"
+expect: [emoji]
+diff: |
+  @@ -8,5 +8,6 @@ export function render(rows: Row[]) {
+  +  // 🔥 hot path: keep allocations out of this loop
+     for (const row of rows) {
+       draw(row);
+     }

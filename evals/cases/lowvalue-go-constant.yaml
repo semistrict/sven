@@ -1,0 +1,13 @@
+path: "client/retry_test.go"
+expect: [low-value-test]
+diff: |
+  @@ -0,0 +1,9 @@
+  +package client
+  +
+  +import "testing"
+  +
+  +func TestMaxRetries(t *testing.T) {
+  +	if MaxRetries != 3 {
+  +		t.Errorf("MaxRetries = %d, want 3", MaxRetries)
+  +	}
+  +}

@@ -1,0 +1,11 @@
+path: "tests/test_cart.py"
+expect: [low-value-test]
+why: "The expected value is computed instead of stated, so it can share any bug in the formula."
+diff: |
+  @@ -0,0 +1,7 @@
+  +def test_total():
+  +    items = [Item(price=250, qty=2), Item(price=100, qty=3)]
+  +
+  +    expected = sum(i.price * i.qty for i in items)
+  +
+  +    assert cart_total(items) == expected

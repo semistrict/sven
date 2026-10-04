@@ -1,0 +1,9 @@
+path: "web/src/orders.ts"
+expect: []
+why: "Renamed in place, with no alias for the old name."
+diff: |
+  @@ -3,5 +3,5 @@ import { api } from "./api";
+  -export async function getOrderList(customer: string) {
+  +export async function listOrders(customer: string) {
+     return (await api.get(`/customers/${customer}/orders`)).data;
+   }

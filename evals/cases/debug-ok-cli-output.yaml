@@ -1,0 +1,11 @@
+path: "cmd/count/main.go"
+expect: []
+why: "Printing results is what a CLI is for."
+diff: |
+  @@ -30,4 +30,8 @@ func main() {
+   	n, err := count(os.Args[1:])
+   	if err != nil {
+   		log.Fatal(err)
+   	}
+  +	fmt.Printf("%d files checked\n", n)
+   }

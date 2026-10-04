@@ -1,0 +1,7 @@
+path: "scripts/migrate.py"
+expect: [emoji]
+diff: |
+  @@ -30,3 +30,4 @@ def main():
+       for m in pending():
+           apply(m)
+  +    print("✅ Migration completed successfully! 🎉")

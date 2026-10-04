@@ -1,0 +1,10 @@
+path: "pricing/prices.py"
+expect: [silent-fallback, swallowed-error]
+diff: |
+  @@ -4,3 +4,6 @@ import json
+   def load_prices(path):
+  -    return json.load(open(path))
+  +    try:
+  +        return json.load(open(path))
+  +    except Exception:
+  +        return {}

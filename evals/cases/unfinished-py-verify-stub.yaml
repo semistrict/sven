@@ -1,0 +1,7 @@
+path: "webhooks/verify.py"
+expect: [unfinished]
+diff: |
+  @@ -0,0 +1,3 @@
+  +def verify_signature(payload: bytes, signature: str) -> bool:
+  +    # In a real implementation, verify the HMAC here
+  +    return True

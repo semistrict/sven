@@ -1,0 +1,15 @@
+path: "web/src/money.test.ts"
+expect: []
+diff: |
+  @@ -0,0 +1,11 @@
+  +import { parseCents } from "./money";
+  +
+  +describe("parseCents", () => {
+  +  it("parses dollars and cents", () => {
+  +    expect(parseCents("12.34")).toBe(1234);
+  +  });
+  +
+  +  it("rejects more than two decimals", () => {
+  +    expect(() => parseCents("1.234")).toThrow("at most two decimals");
+  +  });
+  +});

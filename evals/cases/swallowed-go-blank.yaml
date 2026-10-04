@@ -1,0 +1,9 @@
+path: "config/load.go"
+expect: [swallowed-error]
+diff: |
+  @@ -11,6 +11,7 @@ func Load(path string) (*Config, error) {
+   	var c Config
+  +	data, _ := os.ReadFile(path)
+   	if err := json.Unmarshal(data, &c); err != nil {
+   		return nil, fmt.Errorf("parsing %s: %w", path, err)
+   	}

@@ -1,0 +1,8 @@
+path: "export/csv.py"
+expect: [unfinished]
+diff: |
+  @@ -12,3 +12,6 @@ def to_json(rows):
+       return json.dumps(rows)
+  +
+  +def to_csv(rows):
+  +    raise NotImplementedError
