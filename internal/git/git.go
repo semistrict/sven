@@ -24,9 +24,9 @@ func HooksDir(ctx context.Context) (string, error) {
 	return filepath.Clean(strings.TrimSpace(string(out))), err
 }
 
-// Diff returns what git diff prints for args, such as "--cached" or a
-// revision range followed by "--" and paths. Whatever the user's git config,
-// paths are relative to the work tree root, with a/ and b/ prefixes.
+// Diff returns what git diff prints for args, such as "--cached", a revision
+// range, or paths. Whatever the user's git config, paths are relative to the
+// work tree root, with a/ and b/ prefixes.
 func Diff(ctx context.Context, args ...string) ([]byte, error) {
 	return run(ctx, append([]string{
 		"-c", "core.quotePath=false",

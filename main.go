@@ -48,9 +48,9 @@ const turnedAway = "sven: heute leider nicht.\n      (git commit --no-verify get
 const usage = `sven vibe checks your commits at the door.
 
 Usage:
-  sven [check] [-config file] [-v] [path...]      judge unstaged changes, like git diff
-  sven check --cached [path...]                   judge staged changes
-  sven check --rev range [path...]                judge a revision range
+  sven [check] [--config file] [-v] [git diff args]
+                                                  judge what git diff shows, e.g.
+                                                  --cached, main...HEAD, -- paths
   git diff | sven check --patch                   judge a diff from standard input
   sven install-git-hook [-force]                  install as the git pre-commit hook
   sven init                                       write .sven.yaml with the built-in rules
@@ -109,20 +109,15 @@ func flags(name string, stderr io.Writer) *flag.FlagSet {
 
 func check(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) (rejected bool, err error) {
 	fs := flags("check", stderr)
-	cached := fs.Bool("cached", false, "judge staged changes, as git diff --cached shows them")
-	rev := fs.String("rev", "", "judge a revision range, such as origin/main...HEAD")
 	patch := fs.Bool("patch", false, "judge a unified diff read from standard input")
 	configPath := fs.String("config", "", "root config file (default <work tree>/"+config.FileName+")")
 	verbose := fs.Bool("v", false, "show every verdict, not just violations")
-	if err := fs.Parse(args); err != nil {
+	own, diffArgs := splitArgs(args)
+	if err := fs.Parse(own); err != nil {
 		return false, err
 	}
-	paths := fs.Args()
-	if sources := btoi(*cached) + btoi(*rev != "") + btoi(*patch); sources > 1 {
-		return false, errors.New("use only one of --cached, --rev and --patch")
-	}
-	if *patch && len(paths) > 0 {
-		return false, errors.New("--patch reads every file from the patch; leave out paths")
+	if *patch && len(diffArgs) > 0 {
+		return false, errors.New("--patch reads the diff from standard input; leave out git diff arguments")
 	}
 
 	root, err := git.Root(ctx)
@@ -134,15 +129,10 @@ func check(ctx context.Context, args []string, stdin io.Reader, stdout, stderr i
 		return false, err
 	}
 	var raw []byte
-	switch {
-	case *patch:
+	if *patch {
 		raw, err = io.ReadAll(stdin)
-	case *cached:
-		raw, err = git.Diff(ctx, append([]string{"--cached", "--"}, paths...)...)
-	case *rev != "":
-		raw, err = git.Diff(ctx, append([]string{*rev, "--"}, paths...)...)
-	default:
-		raw, err = git.Diff(ctx, append([]string{"--"}, paths...)...)
+	} else {
+		raw, err = git.Diff(ctx, diffArgs...)
 	}
 	if err != nil {
 		return false, err
@@ -184,11 +174,23 @@ func check(ctx context.Context, args []string, stdin io.Reader, stdout, stderr i
 	return report.Rejected(), nil
 }
 
-func btoi(b bool) int {
-	if b {
-		return 1
+// splitArgs separates sven's own flags from the arguments it passes on to
+// git diff.
+func splitArgs(args []string) (own, diffArgs []string) {
+	for i := 0; i < len(args); i++ {
+		switch a := args[i]; {
+		case a == "--":
+			return own, append(diffArgs, args[i:]...)
+		case a == "-v" || a == "--patch" || a == "-h" || a == "--help" || strings.HasPrefix(a, "--config="):
+			own = append(own, a)
+		case a == "--config" && i+1 < len(args):
+			own = append(own, a, args[i+1])
+			i++
+		default:
+			diffArgs = append(diffArgs, a)
+		}
 	}
-	return 0
+	return own, diffArgs
 }
 
 func printReport(w io.Writer, report bouncer.Report, verbose bool) {

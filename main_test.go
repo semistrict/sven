@@ -205,7 +205,7 @@ func TestRevisionRange(t *testing.T) {
 	gitRun(t, "commit", "-q", "-m", "oops")
 
 	expect(t, staged, exitPass, "sven: nothing to check.\n", "")
-	expect(t, []string{"-rev", "HEAD~1..HEAD"}, exitRejected, rejected+spent("jev-latest", 1), "")
+	expect(t, []string{"check", "HEAD~1..HEAD"}, exitRejected, rejected+spent("jev-latest", 1), "")
 }
 
 func TestCloudflare(t *testing.T) {
@@ -544,9 +544,22 @@ func TestPatchFromStandardInput(t *testing.T) {
 	}
 }
 
-func TestOneSourceAtATime(t *testing.T) {
+func TestPatchTakesNoGitDiffArguments(t *testing.T) {
 	repo(t)
 
-	expect(t, []string{"check", "--cached", "--patch"}, exitError, "", "sven: use only one of --cached, --rev and --patch\n"+turnedAway)
-	expect(t, []string{"check", "--patch", "main.go"}, exitError, "", "sven: --patch reads every file from the patch; leave out paths\n"+turnedAway)
+	expect(t, []string{"check", "--patch", "--cached"}, exitError, "", "sven: --patch reads the diff from standard input; leave out git diff arguments\n"+turnedAway)
+}
+
+func TestGitDiffArgumentsPassThrough(t *testing.T) {
+	repo(t)
+	srv := typesafe(t)
+	stage(t, "main.go", dirty)
+	stage(t, "other.go", dirty)
+	gitRun(t, "commit", "-q", "-m", "two files")
+
+	expect(t, []string{"check", "HEAD~1", "--", "other.go"}, exitRejected, strings.Replace(rejected, "  main.go", "  other.go", 1)+spent("jev-latest", 1), "")
+
+	if got := srv.Paths(); len(got) != 1 {
+		t.Errorf("requests = %q, want 1", got)
+	}
 }

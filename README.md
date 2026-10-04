@@ -92,10 +92,12 @@ Each file is judged alone, from its own diff, in parallel. Answers are cached in
 
 ## Usage
 
+`sven check` takes the same arguments as `git diff`:
+
 ```sh
 sven check                         # unstaged changes
-sven check --cached [path...]      # staged (the hook)
-sven check --rev origin/main...HEAD
+sven check --cached                # staged (the hook)
+sven check origin/main...HEAD -- src/
 git diff | sven check --patch
 ```
 
