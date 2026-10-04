@@ -24,7 +24,7 @@ provider: typesafe
 
 # Default thresholds for rules that don't set their own: a probability from
 # 0 to 1, or off.
-error: 0.5
+error: 0.7
 warn: off
 
 # Git pathspec globs to skip. "*" stops at "/"; "**" crosses directories.
@@ -36,6 +36,10 @@ exclude:
   - "**/pnpm-lock.yaml"
   - "**/vendor/**"
   - "**/node_modules/**"
+  - "**/*.map"
+  - "**/*.min.js"
+  - "**/__snapshots__/**"
+  - "**/*.snap"
 
 rules:
   - id: debug-leftovers

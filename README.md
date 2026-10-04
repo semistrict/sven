@@ -81,10 +81,21 @@ rules:
 
 `evals/` holds 96 labeled diffs, including hard negatives that look bad but
 aren't. On Jev at the default thresholds, sven flags 98% of the bad changes
-with 94% precision. Check your own rules and model:
+with 95% precision. Check your own rules and model:
 
 ```sh
 go run ./evals
+```
+
+On real code, sven checked the 120 most recent merged pull requests from
+cli/cli, prometheus, react, next.js, django and ruff, all code that had
+already passed review. It turned away 5 (4%): two that added TODOs, two that
+added commented-out code, and one false alarm about a swallowed error. 24 more
+got warnings, mostly for skipped tests. The run took 44 seconds and cost
+**$0.05 in total, about $0.0004 per pull request**:
+
+```sh
+evals/prs.sh prometheus/prometheus results/
 ```
 
 Each file is judged alone, from its own diff, in parallel. Answers are cached in

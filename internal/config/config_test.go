@@ -73,7 +73,14 @@ func rule(t *testing.T, rules []bouncer.Rule, id string) bouncer.Rule {
 	return bouncer.Rule{}
 }
 
-var builtinExclude = []string{"**/.sven.yaml", "**/go.sum", "**/*.lock", "**/package-lock.json", "**/pnpm-lock.yaml", "**/vendor/**", "**/node_modules/**"}
+// builtinExclude lists the built-in exclude globs.
+var builtinExclude = func() []string {
+	l, err := decode(Default)
+	if err != nil {
+		panic(err)
+	}
+	return l.Exclude
+}()
 
 func TestDefaults(t *testing.T) {
 	tr, _ := tree(t, nil)
@@ -91,7 +98,7 @@ func TestDefaults(t *testing.T) {
 		t.Errorf("exclude = %v", c.Exclude)
 	}
 	first := c.Rules[0]
-	if first.Error != 0.5 || first.Warn != bouncer.Off || first.Violation == "" || first.OK == "" {
+	if first.Error != 0.7 || first.Warn != bouncer.Off || first.Violation == "" || first.OK == "" {
 		t.Errorf("first rule = %+v", first)
 	}
 	for _, r := range c.Rules {
@@ -186,7 +193,7 @@ rules:
 		t.Errorf("legacy narrating-comments = %+v", got)
 	}
 
-	if want := append(builtinExclude[:7:7], "**/*.gen.go", "web/dist/**"); !reflect.DeepEqual(legacy.Exclude, want) {
+	if want := append(builtinExclude[:len(builtinExclude):len(builtinExclude)], "**/*.gen.go", "web/dist/**"); !reflect.DeepEqual(legacy.Exclude, want) {
 		t.Errorf("legacy exclude = %v, want %v", legacy.Exclude, want)
 	}
 }
@@ -281,7 +288,7 @@ func TestInheritRulesFalse(t *testing.T) {
 	if got, want := ids(docs.Rules), []string{"prose", "more"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("rules = %v, want %v", got, want)
 	}
-	if docs.Rules[0].Error != 0.5 {
-		t.Errorf("error = %v, want the inherited 0.5", docs.Rules[0].Error)
+	if docs.Rules[0].Error != 0.7 {
+		t.Errorf("error = %v, want the inherited 0.7", docs.Rules[0].Error)
 	}
 }
