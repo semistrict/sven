@@ -4,6 +4,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"cmp"
 	"context"
@@ -15,7 +16,7 @@ import (
 	"os/signal"
 	"path"
 	"path/filepath"
-		"strings"
+	"strings"
 
 	"github.com/semistrict/sven/internal/bouncer"
 	"github.com/semistrict/sven/internal/cache"
@@ -53,7 +54,8 @@ Usage:
                                                   --cached, main...HEAD, -- paths
   git diff | sven check --patch                   judge a diff from standard input
   sven install-git-hook [-force]                  install as the git pre-commit hook
-  sven init                                       write .sven.yaml with the built-in rules
+  sven init [--allow-request-storage]             write .sven.yaml, asking whether the
+                                                  free sven API may store requests
 
 Environment:
   TYPESAFE_API_KEY                                for provider typesafe (Jev)
@@ -83,7 +85,7 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	case "install-git-hook":
 		err = installGitHook(ctx, args, stdout, stderr)
 	case "init":
-		err = initConfig(ctx, args, stdout, stderr)
+		err = initConfig(ctx, args, stdin, stdout, stderr)
 	case "help":
 		fmt.Fprint(stdout, usage)
 	default:
@@ -156,7 +158,7 @@ func check(ctx context.Context, args []string, stdin io.Reader, stdout, stderr i
 		return false, nil
 	}
 
-	client, err := provider.New(tree.Provider, tree.Model)
+	client, err := provider.New(tree.Provider, tree.Model, tree.AllowRequestStorage)
 	if err != nil {
 		return false, err
 	}
@@ -258,8 +260,16 @@ func installGitHook(ctx context.Context, args []string, stdout, stderr io.Writer
 	return nil
 }
 
-func initConfig(ctx context.Context, args []string, stdout, stderr io.Writer) error {
-	if err := flags("init", stderr).Parse(args); err != nil {
+const consentPrompt = `sven checks your changes with the free sven API unless you use your own key.
+The free API stores the requests and responses it handles, encrypted, to
+improve sven. Requests are your diffs.
+
+Allow the free sven API to store this project's requests and responses? [y/N] `
+
+func initConfig(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
+	fs := flags("init", stderr)
+	allow := fs.Bool("allow-request-storage", false, "agree to the free sven API storing requests and responses, without asking")
+	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	root, err := git.Root(ctx)
@@ -267,20 +277,37 @@ func initConfig(ctx context.Context, args []string, stdout, stderr io.Writer) er
 		return err
 	}
 	path := filepath.Join(root, config.FileName)
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
-	if errors.Is(err, os.ErrExist) {
+	if _, err := os.Stat(path); err == nil {
 		return fmt.Errorf("%s already exists", path)
 	}
+	if !*allow {
+		fmt.Fprint(stdout, consentPrompt)
+		answer, err := bufio.NewReader(stdin).ReadString('\n')
+		if err != nil && !errors.Is(err, io.EOF) {
+			return err
+		}
+		answer = strings.ToLower(strings.TrimSpace(answer))
+		*allow = answer == "y" || answer == "yes"
+	}
+
+	content := string(config.Default)
+	next := "the free sven API will check this project's changes"
+	if *allow {
+		content = strings.Replace(content, "# allow_request_storage: true", "allow_request_storage: true", 1)
+	} else {
+		content = strings.Replace(content, "provider: sven", "provider: typesafe", 1)
+		next = "set TYPESAFE_API_KEY, or change provider to cloudflare"
+	}
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
 	if err != nil {
 		return err
 	}
-	if _, err := f.Write(config.Default); err != nil {
-		f.Close()
-		return err
+	if _, err := f.WriteString(content); err != nil {
+		return errors.Join(err, f.Close())
 	}
 	if err := f.Close(); err != nil {
 		return err
 	}
-	fmt.Fprintf(stdout, "sven: wrote %s\n", path)
+	fmt.Fprintf(stdout, "sven: wrote %s: %s\n", path, next)
 	return nil
 }

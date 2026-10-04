@@ -4,6 +4,7 @@ package provider
 
 import (
 	"cmp"
+	"errors"
 	"fmt"
 	"os"
 
@@ -12,8 +13,9 @@ import (
 )
 
 // New returns a client for provider and model, an empty model meaning the
-// provider's default. SVEN_PROVIDER and SVEN_MODEL override both.
-func New(provider, model string) (*systemone.Client, error) {
+// provider's default. SVEN_PROVIDER and SVEN_MODEL override both. The free
+// sven API needs the project's consent to storing requests and responses.
+func New(provider, model string, allowRequestStorage bool) (*systemone.Client, error) {
 	provider = cmp.Or(os.Getenv("SVEN_PROVIDER"), provider)
 	var opts []systemone.Option
 	if model := cmp.Or(os.Getenv("SVEN_MODEL"), model); model != "" {
@@ -21,6 +23,9 @@ func New(provider, model string) (*systemone.Client, error) {
 	}
 	switch provider {
 	case config.Sven:
+		if !allowRequestStorage {
+			return nil, errors.New("the free sven API stores the requests and responses it handles: run `sven init` to agree, or use your own key with provider: typesafe and TYPESAFE_API_KEY")
+		}
 		if url := os.Getenv("SVEN_BASE_URL"); url != "" {
 			opts = append(opts, systemone.WithBaseURL(url))
 		}

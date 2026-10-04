@@ -39,8 +39,8 @@ const (
 )
 
 type recorded struct {
-	path, auth, contentType string
-	body                    map[string]any
+	path, auth, contentType, consent string
+	body                             map[string]any
 }
 
 // serve answers every request with status and body, recording what it got.
@@ -52,7 +52,12 @@ func serve(t *testing.T, status int, body string, header http.Header) (*httptest
 		if err != nil {
 			t.Errorf("reading request: %v", err)
 		}
-		rec := recorded{path: r.URL.Path, auth: r.Header.Get("Authorization"), contentType: r.Header.Get("Content-Type")}
+		rec := recorded{
+			path:        r.URL.Path,
+			auth:        r.Header.Get("Authorization"),
+			contentType: r.Header.Get("Content-Type"),
+			consent:     r.Header.Get(SvenConsentHeader),
+		}
 		if err := json.Unmarshal(raw, &rec.body); err != nil {
 			t.Errorf("request is not JSON: %v: %s", err, raw)
 		}
@@ -266,5 +271,22 @@ func TestUsageSummary(t *testing.T) {
 		if got := tc.usage.Summary(tc.model); got != tc.want {
 			t.Errorf("Summary = %q, want %q", got, tc.want)
 		}
+	}
+}
+
+func TestSvenSendsConsentAndNoKey(t *testing.T) {
+	srv, got := serve(t, http.StatusOK, noulResponse, nil)
+	c := Sven(WithBaseURL(srv.URL))
+
+	if _, err := c.Evaluate(t.Context(), "state", map[string]Question{"is_urgent": Noul{Instructions: "?"}}); err != nil {
+		t.Fatal(err)
+	}
+
+	req := (*got)[0]
+	if req.path != "/v1/systemone" || req.auth != "" || req.consent != "store-requests" || req.body["model"] != "jev-latest" {
+		t.Errorf("request = %+v", req)
+	}
+	if c.Name() != "the free sven API" {
+		t.Errorf("Name = %q", c.Name())
 	}
 }

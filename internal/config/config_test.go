@@ -231,7 +231,7 @@ func TestNestedProviderIsAnError(t *testing.T) {
 
 	_, err := tr.For("sub")
 
-	if want := filepath.Join(root, "sub", FileName) + ": provider and model can only be set in the root .sven.yaml"; err == nil || err.Error() != want {
+	if want := filepath.Join(root, "sub", FileName) + ": provider, model, and allow_request_storage can only be set in the root .sven.yaml"; err == nil || err.Error() != want {
 		t.Errorf("err = %v\nwant  %s", err, want)
 	}
 }

@@ -38,13 +38,14 @@ $0.0001, so sven runs on a free API by default.
 
 ```sh
 go install github.com/semistrict/sven@latest
+sven init
 sven install-git-hook
 ```
 
 No key needed. The free API answers sven's built-in rules with Jev, up to 120
-requests a minute. **It stores the diffs it's sent**, encrypted, to improve
-sven's rules. To keep your code to yourself, or to use custom rules, bring
-your own key:
+requests a minute. **It stores the requests and responses it handles**,
+encrypted, to improve sven, so `sven init` asks first. Say no, or want custom
+rules? Bring your own key:
 
 ```yaml
 # .sven.yaml

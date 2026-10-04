@@ -42,13 +42,19 @@ function testEnv(allow = true): Env {
   };
 }
 
-async function call(body: unknown, opts: { env?: Env; jev?: ReturnType<typeof fakeJev>; method?: string; path?: string } = {}) {
+async function call(
+  body: unknown,
+  opts: { env?: Env; jev?: ReturnType<typeof fakeJev>; method?: string; path?: string; consent?: boolean } = {},
+) {
   const jev = opts.jev ?? fakeJev();
   const e = opts.env ?? testEnv();
   const ctx = createExecutionContext();
   const req = new Request(`https://sven.example${opts.path ?? "/v1/systemone"}`, {
     method: opts.method ?? "POST",
-    headers: { "CF-Connecting-IP": "203.0.113.7" },
+    headers: {
+      "CF-Connecting-IP": "203.0.113.7",
+      ...(opts.consent === false ? {} : { "Sven-Consent": "store-requests" }),
+    },
     body: opts.method === "GET" ? undefined : JSON.stringify(body),
   });
   const res = await handle(req, e, ctx, jev.fetch);
@@ -98,6 +104,20 @@ describe("free sven API", () => {
       questions: { "debug-leftovers": debugQuestion },
       response: jevAnswer,
     });
+  });
+
+  it("refuses clients that haven't agreed to storage", async () => {
+    const { res, jev, env: e } = await call(
+      { state, questions: { "debug-leftovers": debugQuestion } },
+      { consent: false },
+    );
+
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({
+      detail: "the free sven API stores the requests and responses it handles: run `sven init` to agree, or use your own key",
+    });
+    expect(jev.sent).toHaveLength(0);
+    expect(await stored(e)).toHaveLength(0);
   });
 
   it("refuses custom questions without asking Jev", async () => {

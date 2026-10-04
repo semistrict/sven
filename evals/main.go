@@ -71,7 +71,7 @@ func evaluate(ctx context.Context, configPath, casesDir, cacheDir string, catcha
 	if err != nil {
 		return err
 	}
-	client, err := provider.New(tree.Provider, tree.Model)
+	client, err := provider.New(tree.Provider, tree.Model, tree.AllowRequestStorage)
 	if err != nil {
 		return err
 	}

@@ -76,11 +76,14 @@ type Rule struct {
 
 // layer is one config file.
 type layer struct {
-	Provider string    `yaml:"provider"`
-	Model    string    `yaml:"model"`
-	Error    Threshold `yaml:"error"`
-	Warn     Threshold `yaml:"warn"`
-	Exclude  []string  `yaml:"exclude"`
+	Provider string `yaml:"provider"`
+	Model    string `yaml:"model"`
+	// AllowRequestStorage is the project's consent to the free sven API
+	// storing its requests and responses.
+	AllowRequestStorage bool      `yaml:"allow_request_storage"`
+	Error               Threshold `yaml:"error"`
+	Warn                Threshold `yaml:"warn"`
+	Exclude             []string  `yaml:"exclude"`
 	// InheritRules false drops the rules of the layers above.
 	InheritRules *bool  `yaml:"inherit_rules"`
 	Rules        []Rule `yaml:"rules"`
@@ -103,6 +106,9 @@ type Config struct {
 // Tree reads config files from a work tree as directories are asked for.
 type Tree struct {
 	Provider string
+	// AllowRequestStorage is whether the project agreed to the free sven API
+	// storing its requests and responses.
+	AllowRequestStorage bool
 	// Model is empty for the provider's default.
 	Model string
 
@@ -133,6 +139,7 @@ func Load(root, file string) (*Tree, error) {
 	for _, p := range t.top {
 		t.Provider = cmp.Or(p.layer.Provider, t.Provider)
 		t.Model = cmp.Or(p.layer.Model, t.Model)
+		t.AllowRequestStorage = t.AllowRequestStorage || p.layer.AllowRequestStorage
 	}
 	return t, nil
 }
@@ -248,8 +255,8 @@ func decode(raw []byte) (*layer, error) {
 var ruleID = regexp.MustCompile(`^[A-Za-z0-9_.-]{1,100}$`)
 
 func (l *layer) validate(nested bool) error {
-	if nested && (l.Provider != "" || l.Model != "") {
-		return fmt.Errorf("provider and model can only be set in the root %s", FileName)
+	if nested && (l.Provider != "" || l.Model != "" || l.AllowRequestStorage) {
+		return fmt.Errorf("provider, model, and allow_request_storage can only be set in the root %s", FileName)
 	}
 	if l.Provider != "" && l.Provider != Sven && l.Provider != TypeSafe && l.Provider != Cloudflare {
 		return fmt.Errorf("provider %q: want %s, %s, or %s", l.Provider, Sven, TypeSafe, Cloudflare)

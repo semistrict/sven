@@ -114,16 +114,16 @@ func typesafe(t *testing.T) *systemonetest.Server {
 	return srv
 }
 
-func sven(t *testing.T, args ...string) (code int, stdout, stderr string) {
-	t.Helper()
-	var out, errOut bytes.Buffer
-	code = run(t.Context(), args, strings.NewReader(""), &out, &errOut)
-	return code, out.String(), errOut.String()
-}
-
 func expect(t *testing.T, args []string, wantCode int, wantStdout, wantStderr string) {
 	t.Helper()
-	code, stdout, stderr := sven(t, args...)
+	expectWithInput(t, "", args, wantCode, wantStdout, wantStderr)
+}
+
+func expectWithInput(t *testing.T, stdin string, args []string, wantCode int, wantStdout, wantStderr string) {
+	t.Helper()
+	var out, errOut bytes.Buffer
+	code := run(t.Context(), args, strings.NewReader(stdin), &out, &errOut)
+	stdout, stderr := out.String(), errOut.String()
 	if code != wantCode || stdout != wantStdout || stderr != wantStderr {
 		t.Errorf("sven %s = %d\nstdout:\n%s\nstderr:\n%s\nwant %d\nstdout:\n%s\nstderr:\n%s",
 			strings.Join(args, " "), code, stdout, stderr, wantCode, wantStdout, wantStderr)
@@ -272,15 +272,70 @@ func TestInvalidConfig(t *testing.T) {
 	expect(t, staged, exitError, "", "sven: "+filepath.Join(dir, config.FileName)+": provider \"openai\": want sven, typesafe, or cloudflare\n"+turnedAway)
 }
 
-func TestInit(t *testing.T) {
+// freeAPI points the sven provider at a fake server that needs no key.
+func freeAPI(t *testing.T) *systemonetest.Server {
+	t.Helper()
+	srv := systemonetest.NewServer(t, judge)
+	srv.Token = ""
+	t.Setenv("SVEN_BASE_URL", srv.URL)
+	t.Setenv("TYPESAFE_API_KEY", "")
+	return srv
+}
+
+func TestInitAgreeingToStorage(t *testing.T) {
+	dir := repo(t)
+	srv := freeAPI(t)
+	path := filepath.Join(dir, config.FileName)
+
+	expectWithInput(t, "y\n", []string{"init"}, exitPass, consentPrompt+"sven: wrote "+path+": the free sven API will check this project's changes\n", "")
+
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(got), "\nprovider: sven\n") || !strings.Contains(string(got), "\nallow_request_storage: true\n") {
+		t.Errorf("%s does not use the free API with consent:\n%s", path, got)
+	}
+	stage(t, "main.go", dirty)
+	expect(t, staged, exitRejected, rejected+"sven: 100 input tokens on the free sven API\n", "")
+	if got := srv.Paths(); len(got) != 1 || got[0] != "/v1/systemone" {
+		t.Errorf("requests = %q", got)
+	}
+}
+
+func TestInitDecliningStorage(t *testing.T) {
 	dir := repo(t)
 	path := filepath.Join(dir, config.FileName)
 
-	expect(t, []string{"init"}, exitPass, "sven: wrote "+path+"\n", "")
-	if got, err := os.ReadFile(path); err != nil || !bytes.Equal(got, config.Default) {
-		t.Errorf("%s = %q, %v", path, got, err)
+	expectWithInput(t, "\n", []string{"init"}, exitPass, consentPrompt+"sven: wrote "+path+": set TYPESAFE_API_KEY, or change provider to cloudflare\n", "")
+
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
 	}
+	if !strings.Contains(string(got), "\nprovider: typesafe\n") || strings.Contains(string(got), "\nallow_request_storage: true\n") {
+		t.Errorf("%s should use the user's own key:\n%s", path, got)
+	}
+}
+
+func TestInitAllowFlagSkipsTheQuestion(t *testing.T) {
+	dir := repo(t)
+	path := filepath.Join(dir, config.FileName)
+
+	expect(t, []string{"init", "--allow-request-storage"}, exitPass, "sven: wrote "+path+": the free sven API will check this project's changes\n", "")
 	expect(t, []string{"init"}, exitError, "", "sven: "+path+" already exists\n"+turnedAway)
+}
+
+func TestFreeAPINeedsConsent(t *testing.T) {
+	repo(t)
+	srv := freeAPI(t)
+	stage(t, "main.go", dirty)
+
+	expect(t, staged, exitError, "", "sven: the free sven API stores the requests and responses it handles: run `sven init` to agree, or use your own key with provider: typesafe and TYPESAFE_API_KEY\n"+turnedAway)
+
+	if got := srv.Paths(); len(got) != 0 {
+		t.Errorf("requests = %q, want none", got)
+	}
 }
 
 func TestInstallGitHook(t *testing.T) {
@@ -563,20 +618,5 @@ func TestGitDiffArgumentsPassThrough(t *testing.T) {
 
 	if got := srv.Paths(); len(got) != 1 {
 		t.Errorf("requests = %q, want 1", got)
-	}
-}
-
-func TestFreeAPIByDefault(t *testing.T) {
-	repo(t)
-	srv := systemonetest.NewServer(t, judge)
-	srv.Token = ""
-	t.Setenv("SVEN_BASE_URL", srv.URL)
-	t.Setenv("TYPESAFE_API_KEY", "")
-	stage(t, "main.go", dirty)
-
-	expect(t, staged, exitRejected, rejected+"sven: 100 input tokens on the free sven API\n", "")
-
-	if got := srv.Paths(); len(got) != 1 || got[0] != "/v1/systemone" {
-		t.Errorf("requests = %q", got)
 	}
 }

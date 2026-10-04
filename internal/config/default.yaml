@@ -21,6 +21,11 @@
 # cloudflare: Cloudflare Clef, needs CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN.
 provider: sven
 
+# The free sven API stores the requests and responses it handles, encrypted,
+# so it only runs for projects that agree to that. `sven init` asks. If you'd
+# rather not, use your own key with provider: typesafe or cloudflare.
+# allow_request_storage: true
+
 # Defaults to jev-latest for typesafe and clef-flash for cloudflare.
 # model: jev-latest
 

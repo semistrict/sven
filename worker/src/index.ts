@@ -56,6 +56,12 @@ export async function handle(
   if (request.method !== "POST") {
     return problem(405, "use POST");
   }
+  if (request.headers.get("Sven-Consent") !== "store-requests") {
+    return problem(
+      403,
+      "the free sven API stores the requests and responses it handles: run `sven init` to agree, or use your own key",
+    );
+  }
   const ip = request.headers.get("CF-Connecting-IP") ?? "unknown";
   if (!(await env.RATE_LIMITER.limit({ key: ip })).success) {
     return problem(429, "the free sven API allows 120 requests a minute");

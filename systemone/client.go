@@ -26,6 +26,11 @@ const (
 	SvenBaseURL = "https://sven.semistrict.workers.dev"
 	SvenName    = "the free sven API"
 
+	// SvenConsentHeader carries a project's consent to the free sven API
+	// storing its requests and responses; the API refuses requests without it.
+	SvenConsentHeader = "Sven-Consent"
+	SvenConsent       = "store-requests"
+
 	defaultTimeout     = 10 * time.Second
 	defaultMaxAttempts = 3
 	defaultBackoff     = 250 * time.Millisecond
@@ -37,7 +42,9 @@ type Client struct {
 	token string
 	model string
 	// name is who answers, for people: the model, or the free sven API.
-	name        string
+	name string
+	// header is sent with every request.
+	header      http.Header
 	http        *http.Client
 	maxAttempts int
 	backoff     time.Duration
@@ -67,11 +74,13 @@ func TypeSafe(apiKey string, opts ...Option) *Client {
 	return newClient(o, o.baseURL+"/v1/systemone", apiKey, false)
 }
 
-// Sven returns a client for the free sven API, which needs no key.
+// Sven returns a client for the free sven API, which needs no key. Creating
+// one is agreeing that the API stores the requests and responses it handles.
 func Sven(opts ...Option) *Client {
 	o := resolve(opts, SvenBaseURL, TypeSafeDefaultModel)
 	c := newClient(o, o.baseURL+"/v1/systemone", "", false)
 	c.name = SvenName
+	c.header.Set(SvenConsentHeader, SvenConsent)
 	return c
 }
 
@@ -96,6 +105,7 @@ func newClient(o options, url, token string, enveloped bool) *Client {
 		token:       token,
 		model:       o.model,
 		name:        o.model,
+		header:      http.Header{},
 		http:        o.httpClient,
 		maxAttempts: defaultMaxAttempts,
 		backoff:     defaultBackoff,
@@ -141,6 +151,9 @@ func (c *Client) post(ctx context.Context, body []byte) (*Response, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.url, bytes.NewReader(body))
 	if err != nil {
 		return nil, err
+	}
+	for k, v := range c.header {
+		req.Header[k] = v
 	}
 	if c.token != "" {
 		req.Header.Set("Authorization", "Bearer "+c.token)
