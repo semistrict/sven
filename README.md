@@ -39,7 +39,7 @@ $0.0001.
 ```sh
 go install github.com/semistrict/sven@latest
 export TYPESAFE_API_KEY=...
-sven install
+sven install-git-hook
 ```
 
 Or with [pre-commit](https://pre-commit.com):

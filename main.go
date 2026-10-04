@@ -48,11 +48,11 @@ const turnedAway = "sven: heute leider nicht.\n      (git commit --no-verify get
 const usage = `sven vibe checks your commits at the door.
 
 Usage:
-  sven [check] [-config file] [-v] [path...]       judge unstaged changes, like git diff
+  sven [check] [-config file] [-v] [path...]      judge unstaged changes, like git diff
   sven check --cached [path...]                   judge staged changes
   sven check --rev range [path...]                judge a revision range
   git diff | sven check --patch                   judge a diff from standard input
-  sven install [-force]                           install as the pre-commit hook
+  sven install-git-hook [-force]                  install as the git pre-commit hook
   sven init                                       write .sven.yaml with the built-in rules
 
 Environment:
@@ -80,8 +80,8 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 		if err == nil && rejected {
 			return exitRejected
 		}
-	case "install":
-		err = install(ctx, args, stdout, stderr)
+	case "install-git-hook":
+		err = installGitHook(ctx, args, stdout, stderr)
 	case "init":
 		err = initConfig(ctx, args, stdout, stderr)
 	case "help":
@@ -224,8 +224,8 @@ func printReport(w io.Writer, report bouncer.Report, verbose bool) {
 
 var marks = map[bouncer.Level]string{bouncer.OK: "✓", bouncer.Warn: "!", bouncer.Error: "✗"}
 
-func install(ctx context.Context, args []string, stdout, stderr io.Writer) error {
-	fs := flags("install", stderr)
+func installGitHook(ctx context.Context, args []string, stdout, stderr io.Writer) error {
+	fs := flags("install-git-hook", stderr)
 	force := fs.Bool("force", false, "replace an existing pre-commit hook")
 	if err := fs.Parse(args); err != nil {
 		return err

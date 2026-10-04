@@ -281,11 +281,11 @@ func TestInit(t *testing.T) {
 	expect(t, []string{"init"}, exitError, "", "sven: "+path+" already exists\n"+turnedAway)
 }
 
-func TestInstall(t *testing.T) {
+func TestInstallGitHook(t *testing.T) {
 	dir := repo(t)
 	hook := filepath.Join(dir, ".git", "hooks", "pre-commit")
 
-	expect(t, []string{"install"}, exitPass, "sven: installed "+hook+"\n", "")
+	expect(t, []string{"install-git-hook"}, exitPass, "sven: installed "+hook+"\n", "")
 	info, err := os.Stat(hook)
 	if err != nil {
 		t.Fatal(err)
@@ -293,27 +293,27 @@ func TestInstall(t *testing.T) {
 	if got, err := os.ReadFile(hook); err != nil || string(got) != hookScript || info.Mode().Perm() != 0o755 {
 		t.Errorf("hook = %q (mode %v), %v", got, info.Mode(), err)
 	}
-	expect(t, []string{"install"}, exitPass, "sven: installed "+hook+"\n", "")
+	expect(t, []string{"install-git-hook"}, exitPass, "sven: installed "+hook+"\n", "")
 }
 
-func TestInstallKeepsForeignHook(t *testing.T) {
+func TestInstallGitHookKeepsForeignHook(t *testing.T) {
 	dir := repo(t)
 	hook := filepath.Join(dir, ".git", "hooks", "pre-commit")
 	write(t, hook, "#!/bin/sh\nmake lint\n")
 
-	expect(t, []string{"install"}, exitError, "", "sven: "+hook+" already exists: add `sven check --cached` to it, or replace it with -force\n"+turnedAway)
-	expect(t, []string{"install", "-force"}, exitPass, "sven: installed "+hook+"\n", "")
+	expect(t, []string{"install-git-hook"}, exitError, "", "sven: "+hook+" already exists: add `sven check --cached` to it, or replace it with -force\n"+turnedAway)
+	expect(t, []string{"install-git-hook", "-force"}, exitPass, "sven: installed "+hook+"\n", "")
 	if got, err := os.ReadFile(hook); err != nil || string(got) != hookScript {
 		t.Errorf("hook = %q, %v", got, err)
 	}
 }
 
-func TestInstallHonorsHooksPath(t *testing.T) {
+func TestInstallGitHookHonorsHooksPath(t *testing.T) {
 	dir := repo(t)
 	gitRun(t, "config", "core.hooksPath", ".githooks")
 	hook := filepath.Join(dir, ".githooks", "pre-commit")
 
-	expect(t, []string{"install"}, exitPass, "sven: installed "+hook+"\n", "")
+	expect(t, []string{"install-git-hook"}, exitPass, "sven: installed "+hook+"\n", "")
 }
 
 // TestHookGuardsCommits installs the real binary as a pre-commit hook and
@@ -327,7 +327,7 @@ func TestHookGuardsCommits(t *testing.T) {
 	dir := repo(t)
 	typesafe(t)
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
-	expect(t, []string{"install"}, exitPass, "sven: installed "+filepath.Join(dir, ".git", "hooks", "pre-commit")+"\n", "")
+	expect(t, []string{"install-git-hook"}, exitPass, "sven: installed "+filepath.Join(dir, ".git", "hooks", "pre-commit")+"\n", "")
 
 	stage(t, "main.go", dirty)
 	out, err := exec.Command("git", "commit", "-m", "debug").CombinedOutput()
