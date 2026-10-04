@@ -17,7 +17,7 @@ type Judge func(state map[string]any, instructions string) float64
 
 type Server struct {
 	*httptest.Server
-	// Token is the bearer token every request must carry.
+	// Token is the bearer token every request must carry; empty means none.
 	Token string
 
 	t        testing.TB
@@ -74,7 +74,7 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if r.Header.Get("Authorization") != "Bearer "+s.Token {
+	if s.Token != "" && r.Header.Get("Authorization") != "Bearer "+s.Token {
 		http.Error(w, `{"detail":"invalid API key"}`, http.StatusUnauthorized)
 		return
 	}

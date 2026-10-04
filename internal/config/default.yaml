@@ -15,9 +15,11 @@
 # fields, `path` and `diff`, the file's unified diff, where lines starting
 # with "+" are added and lines starting with "-" are removed.
 
+# sven: the free sven API, which runs Jev and needs no key. It answers only
+#   the built-in rules, and stores what it's sent, encrypted.
 # typesafe: TypeSafe Jev, needs TYPESAFE_API_KEY.
 # cloudflare: Cloudflare Clef, needs CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN.
-provider: typesafe
+provider: sven
 
 # Defaults to jev-latest for typesafe and clef-flash for cloudflare.
 # model: jev-latest

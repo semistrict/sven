@@ -20,6 +20,11 @@ func New(provider, model string) (*systemone.Client, error) {
 		opts = append(opts, systemone.WithModel(model))
 	}
 	switch provider {
+	case config.Sven:
+		if url := os.Getenv("SVEN_BASE_URL"); url != "" {
+			opts = append(opts, systemone.WithBaseURL(url))
+		}
+		return systemone.Sven(opts...), nil
 	case config.TypeSafe:
 		key, err := env("TYPESAFE_API_KEY")
 		if err != nil {
@@ -43,7 +48,7 @@ func New(provider, model string) (*systemone.Client, error) {
 		}
 		return systemone.Cloudflare(account, token, opts...), nil
 	}
-	return nil, fmt.Errorf("unknown provider %q: want %s or %s", provider, config.TypeSafe, config.Cloudflare)
+	return nil, fmt.Errorf("unknown provider %q: want %s, %s, or %s", provider, config.Sven, config.TypeSafe, config.Cloudflare)
 }
 
 func env(name string) (string, error) {

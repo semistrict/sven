@@ -37,6 +37,7 @@ const FileName = ".sven.yaml"
 var Default []byte
 
 const (
+	Sven       = "sven"
 	TypeSafe   = "typesafe"
 	Cloudflare = "cloudflare"
 
@@ -250,8 +251,8 @@ func (l *layer) validate(nested bool) error {
 	if nested && (l.Provider != "" || l.Model != "") {
 		return fmt.Errorf("provider and model can only be set in the root %s", FileName)
 	}
-	if l.Provider != "" && l.Provider != TypeSafe && l.Provider != Cloudflare {
-		return fmt.Errorf("provider %q: want %s or %s", l.Provider, TypeSafe, Cloudflare)
+	if l.Provider != "" && l.Provider != Sven && l.Provider != TypeSafe && l.Provider != Cloudflare {
+		return fmt.Errorf("provider %q: want %s, %s, or %s", l.Provider, Sven, TypeSafe, Cloudflare)
 	}
 	for _, glob := range l.Exclude {
 		if err := checkGlob(glob); err != nil {

@@ -89,7 +89,7 @@ func evaluate(ctx context.Context, configPath, casesDir, cacheDir string, catcha
 		return err
 	}
 	fmt.Fprintf(w, "%s with %d rules on %d cases\n", client.Model(), len(cfg.Rules), len(cases))
-	fmt.Fprintf(w, "cost: %s\n\n", report.Usage.Summary(client.Model()))
+	fmt.Fprintf(w, "cost: %s\n\n", report.Usage.Summary(client.Name()))
 	write(w, judge(cases, labels, catchall, report), verbose)
 	return nil
 }

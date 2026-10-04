@@ -21,6 +21,11 @@ const (
 	CloudflareBaseURL      = "https://api.cloudflare.com/client/v4"
 	CloudflareDefaultModel = "clef-flash"
 
+	// SvenBaseURL serves the free sven API, which answers sven's built-in
+	// rules with Jev at no charge.
+	SvenBaseURL = "https://sven.semistrict.workers.dev"
+	SvenName    = "the free sven API"
+
 	defaultTimeout     = 10 * time.Second
 	defaultMaxAttempts = 3
 	defaultBackoff     = 250 * time.Millisecond
@@ -28,9 +33,11 @@ const (
 
 // Client evaluates questions against a System One endpoint.
 type Client struct {
-	url         string
-	token       string
-	model       string
+	url   string
+	token string
+	model string
+	// name is who answers, for people: the model, or the free sven API.
+	name        string
 	http        *http.Client
 	maxAttempts int
 	backoff     time.Duration
@@ -60,6 +67,14 @@ func TypeSafe(apiKey string, opts ...Option) *Client {
 	return newClient(o, o.baseURL+"/v1/systemone", apiKey, false)
 }
 
+// Sven returns a client for the free sven API, which needs no key.
+func Sven(opts ...Option) *Client {
+	o := resolve(opts, SvenBaseURL, TypeSafeDefaultModel)
+	c := newClient(o, o.baseURL+"/v1/systemone", "", false)
+	c.name = SvenName
+	return c
+}
+
 // Cloudflare returns a client for Cloudflare Workers AI, which serves Clef.
 func Cloudflare(accountID, apiToken string, opts ...Option) *Client {
 	o := resolve(opts, CloudflareBaseURL, CloudflareDefaultModel)
@@ -80,6 +95,7 @@ func newClient(o options, url, token string, enveloped bool) *Client {
 		url:         url,
 		token:       token,
 		model:       o.model,
+		name:        o.model,
 		http:        o.httpClient,
 		maxAttempts: defaultMaxAttempts,
 		backoff:     defaultBackoff,
@@ -89,6 +105,9 @@ func newClient(o options, url, token string, enveloped bool) *Client {
 
 // Model is the model requests are sent to.
 func (c *Client) Model() string { return c.model }
+
+// Name is who answers requests, for people.
+func (c *Client) Name() string { return c.name }
 
 // Endpoint is the URL requests are sent to.
 func (c *Client) Endpoint() string { return c.url }
@@ -123,7 +142,9 @@ func (c *Client) post(ctx context.Context, body []byte) (*Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", "Bearer "+c.token)
+	if c.token != "" {
+		req.Header.Set("Authorization", "Bearer "+c.token)
+	}
 	req.Header.Set("Content-Type", "application/json")
 	httpResp, err := c.http.Do(req)
 	if err != nil {

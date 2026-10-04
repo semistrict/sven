@@ -170,7 +170,7 @@ func check(ctx context.Context, args []string, stdin io.Reader, stdout, stderr i
 		return false, err
 	}
 	printReport(stdout, report, *verbose)
-	fmt.Fprintf(stdout, "sven: %s\n", report.Usage.Summary(client.Model()))
+	fmt.Fprintf(stdout, "sven: %s\n", report.Usage.Summary(client.Name()))
 	return report.Rejected(), nil
 }
 

@@ -45,7 +45,7 @@ func TestReport(t *testing.T) {
 		}
 		return 0.1
 	})
-	t.Setenv("SVEN_PROVIDER", "")
+	t.Setenv("SVEN_PROVIDER", "typesafe")
 	t.Setenv("SVEN_MODEL", "")
 	t.Setenv("TYPESAFE_API_KEY", srv.Token)
 	t.Setenv("TYPESAFE_BASE_URL", srv.URL)

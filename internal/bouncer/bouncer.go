@@ -40,7 +40,8 @@ type Rule struct {
 	Error, Warn float64
 }
 
-func (r Rule) question() systemone.Question {
+// Noul is the rule as the question sent to the model.
+func (r Rule) Noul() systemone.Question {
 	q := systemone.Noul{Instructions: r.Question}
 	if r.Violation != "" {
 		q.True = r.Violation
@@ -136,7 +137,7 @@ func (b Bouncer) Check(ctx context.Context, targets []Target) (Report, error) {
 		}
 		questions := make(map[string]systemone.Question, len(t.Rules))
 		for _, r := range t.Rules {
-			questions[r.ID] = r.question()
+			questions[r.ID] = r.Noul()
 		}
 		for _, chunk := range t.File.Chunks(b.ChunkBytes) {
 			jobs = append(jobs, job{

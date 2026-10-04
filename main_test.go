@@ -108,6 +108,7 @@ func stage(t *testing.T, path, content string) {
 func typesafe(t *testing.T) *systemonetest.Server {
 	t.Helper()
 	srv := systemonetest.NewServer(t, judge)
+	t.Setenv("SVEN_PROVIDER", "typesafe")
 	t.Setenv("TYPESAFE_API_KEY", srv.Token)
 	t.Setenv("TYPESAFE_BASE_URL", srv.URL)
 	return srv
@@ -242,6 +243,7 @@ func TestProviderFromEnvironment(t *testing.T) {
 
 func TestMissingAPIKey(t *testing.T) {
 	repo(t)
+	t.Setenv("SVEN_PROVIDER", "typesafe")
 	t.Setenv("TYPESAFE_API_KEY", "")
 	stage(t, "main.go", dirty)
 
@@ -267,7 +269,7 @@ func TestInvalidConfig(t *testing.T) {
 	write(t, config.FileName, "provider: openai\n")
 	stage(t, "main.go", dirty)
 
-	expect(t, staged, exitError, "", "sven: "+filepath.Join(dir, config.FileName)+": provider \"openai\": want typesafe or cloudflare\n"+turnedAway)
+	expect(t, staged, exitError, "", "sven: "+filepath.Join(dir, config.FileName)+": provider \"openai\": want sven, typesafe, or cloudflare\n"+turnedAway)
 }
 
 func TestInit(t *testing.T) {
@@ -561,5 +563,20 @@ func TestGitDiffArgumentsPassThrough(t *testing.T) {
 
 	if got := srv.Paths(); len(got) != 1 {
 		t.Errorf("requests = %q, want 1", got)
+	}
+}
+
+func TestFreeAPIByDefault(t *testing.T) {
+	repo(t)
+	srv := systemonetest.NewServer(t, judge)
+	srv.Token = ""
+	t.Setenv("SVEN_BASE_URL", srv.URL)
+	t.Setenv("TYPESAFE_API_KEY", "")
+	stage(t, "main.go", dirty)
+
+	expect(t, staged, exitRejected, rejected+"sven: 100 input tokens on the free sven API\n", "")
+
+	if got := srv.Paths(); len(got) != 1 || got[0] != "/v1/systemone" {
+		t.Errorf("requests = %q", got)
 	}
 }

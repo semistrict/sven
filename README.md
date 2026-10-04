@@ -32,14 +32,23 @@ sven asks a System One model instead: TypeSafe's
 [Clef](https://developers.cloudflare.com/workers-ai/models/clef-flash/). These
 don't generate text. They take a diff and a list of yes/no questions and return
 a calibrated probability for each, in one forward pass. A file costs about
-$0.0001.
+$0.0001, so sven runs on a free API by default.
 
 ## Install
 
 ```sh
 go install github.com/semistrict/sven@latest
-export TYPESAFE_API_KEY=...
 sven install-git-hook
+```
+
+No key needed. The free API answers sven's built-in rules with Jev, up to 120
+requests a minute. **It stores the diffs it's sent**, encrypted, to improve
+sven's rules. To keep your code to yourself, or to use custom rules, bring
+your own key:
+
+```yaml
+# .sven.yaml
+provider: typesafe   # with TYPESAFE_API_KEY, or cloudflare with CLOUDFLARE_* keys
 ```
 
 Or with [pre-commit](https://pre-commit.com):

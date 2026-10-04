@@ -88,7 +88,7 @@ func TestDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if tr.Provider != TypeSafe || tr.Model != "" {
+	if tr.Provider != Sven || tr.Model != "" {
 		t.Errorf("provider, model = %q, %q", tr.Provider, tr.Model)
 	}
 	if got := ids(c.Rules); !reflect.DeepEqual(got, builtinIDs) {
@@ -238,7 +238,7 @@ func TestNestedProviderIsAnError(t *testing.T) {
 
 func TestInvalid(t *testing.T) {
 	for _, tc := range []struct{ name, yaml, err string }{
-		{"provider", "provider: openai", `provider "openai": want typesafe or cloudflare`},
+		{"provider", "provider: openai", `provider "openai": want sven, typesafe, or cloudflare`},
 		{"threshold", "error: 1.5", "line 1: threshold 1.5: want more than 0 and at most 1, or off"},
 		{"threshold word", "warn: never", "line 1: threshold never: want more than 0 and at most 1, or off"},
 		{"unknown field", "threshold: 0.5", "yaml: unmarshal errors:\n  line 1: field threshold not found in type config.layer"},
@@ -290,5 +290,19 @@ func TestInheritRulesFalse(t *testing.T) {
 	}
 	if docs.Rules[0].Error != 0.7 {
 		t.Errorf("error = %v, want the inherited 0.7", docs.Rules[0].Error)
+	}
+}
+
+func TestWorkerAllowListIsCurrent(t *testing.T) {
+	want, err := BuiltinQuestions()
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile("../../worker/src/builtin.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != string(want) {
+		t.Error("worker/src/builtin.json is stale: run go generate ./internal/config")
 	}
 }
