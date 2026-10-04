@@ -187,6 +187,16 @@ describe("free sven API", () => {
     expect(res.status).toBe(429);
   });
 
+  it("refuses to answer until both secrets are set", async () => {
+    const unset = { ...testEnv(), SVEN_ENCRYPTION_KEY: "" };
+
+    const { res, jev } = await call({ state, questions: { "debug-leftovers": debugQuestion } }, { env: unset });
+
+    expect(res.status).toBe(503);
+    expect(await res.json()).toEqual({ detail: "the free sven API isn't set up yet" });
+    expect(jev.sent).toHaveLength(0);
+  });
+
   it("serves only POST /v1/systemone", async () => {
     expect((await call(null, { path: "/" })).res.status).toBe(404);
     expect((await call(null, { method: "GET" })).res.status).toBe(405);

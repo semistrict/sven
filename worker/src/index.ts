@@ -56,6 +56,10 @@ export async function handle(
   if (request.method !== "POST") {
     return problem(405, "use POST");
   }
+  if (!env.TYPESAFE_API_KEY || !env.SVEN_ENCRYPTION_KEY) {
+    console.error("TYPESAFE_API_KEY and SVEN_ENCRYPTION_KEY must both be set");
+    return problem(503, "the free sven API isn't set up yet");
+  }
   if (request.headers.get("Sven-Consent") !== "store-requests") {
     return problem(
       403,
