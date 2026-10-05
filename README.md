@@ -102,13 +102,13 @@ go run ./evals
 
 On real code, sven checked the 120 most recent merged pull requests from
 cli/cli, prometheus, react, next.js, django and ruff, all code that had
-already passed review. It turned away 5 (4%): two that added TODOs, two that
-added commented-out code, and one false alarm about a swallowed error. 24 more
-got warnings, mostly for skipped tests. The run took 44 seconds and cost
-**$0.05 in total, about $0.0004 per pull request**:
+already passed review. It turned away 3 (2.5%): two that added commented-out
+code, and one false alarm about a swallowed error. 16 more got warnings, mostly
+for skipped tests. It cost **$0.055 in total, about $0.0005 per pull
+request**:
 
 ```sh
-evals/prs.sh prometheus/prometheus results/
+evals/prs.sh prometheus/prometheus results/ 20
 ```
 
 Each file is judged alone, from its own diff, in parallel. Answers are cached in
