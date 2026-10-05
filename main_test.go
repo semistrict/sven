@@ -683,10 +683,50 @@ func TestAllChecksEveryTrackedFile(t *testing.T) {
 	}
 }
 
-func TestAllAndPatchConflict(t *testing.T) {
+func TestSourcesConflict(t *testing.T) {
 	repo(t)
 
-	expect(t, []string{"check", "--all", "--patch"}, exitError, "", "sven: use either --patch or --all\n")
+	expect(t, []string{"check", "--all", "--patch"}, exitError, "", "sven: use only one of --patch, --all, and --commit\n")
+	expect(t, []string{"check", "--commit", "HEAD", "--all"}, exitError, "", "sven: use only one of --patch, --all, and --commit\n")
+}
+
+func TestCommitChecksWhatOneCommitChanged(t *testing.T) {
+	repo(t)
+	typesafe(t)
+	stage(t, "main.go", dirty)
+	gitRun(t, "commit", "-q", "-m", "oops")
+	stage(t, "other.go", clean)
+	gitRun(t, "commit", "-q", "-m", "other")
+	// Uncommitted changes don't count.
+	write(t, "other.go", dirty)
+
+	expect(t, []string{"check", "--commit", "HEAD~1"}, exitRejected, rejected+spent("jev-latest", 1), "")
+	expect(t, []string{"check", "--commit=HEAD"}, exitPass, letIn+spent("jev-latest", 1), "")
+	expect(t, []string{"check", "--commit", "HEAD", "--", "main.go"}, exitPass, "sven: nothing to check: commit HEAD changes nothing in main.go.\n", "")
+	expect(t, []string{"check", "--commit", "nope"}, exitError, "", "sven: no commit nope\n")
+}
+
+func TestCommitRootIsCheckedFromTheEmptyTree(t *testing.T) {
+	repo(t)
+	typesafe(t)
+
+	expect(t, []string{"check", "--commit", "HEAD", "--only", "debug-leftovers", "-v"}, exitPass,
+		"  main.go\n    ✓ debug-leftovers          2%\n\n"+letIn+spent("jev-latest", 1), "")
+}
+
+func TestCommitMergeIsComparedToItsFirstParent(t *testing.T) {
+	repo(t)
+	typesafe(t)
+	gitRun(t, "checkout", "-q", "-b", "side")
+	stage(t, "lib.go", dirty)
+	gitRun(t, "commit", "-q", "-m", "side")
+	gitRun(t, "checkout", "-q", "-")
+	stage(t, "other.go", clean)
+	gitRun(t, "commit", "-q", "-m", "other")
+	gitRun(t, "merge", "-q", "--no-ff", "--no-edit", "side")
+
+	// One request: lib.go, which the merge brought in, and not other.go.
+	expect(t, []string{"check", "--commit", "HEAD"}, exitRejected, strings.Replace(rejected, "  main.go", "  lib.go", 1)+spent("jev-latest", 1), "")
 }
 
 func TestInterruptPrintsWhatWasJudged(t *testing.T) {

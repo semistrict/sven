@@ -6,6 +6,7 @@ package git
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os/exec"
 	"path/filepath"
@@ -29,6 +30,31 @@ func HooksDir(ctx context.Context) (string, error) {
 func EmptyTree(ctx context.Context) (string, error) {
 	out, err := run(ctx, "hash-object", "-t", "tree", "/dev/null")
 	return strings.TrimSpace(string(out)), err
+}
+
+// Commit resolves rev to a commit and returns it with its first parent, or
+// the empty tree for a root commit: diffing parent to commit shows what the
+// commit changed.
+func Commit(ctx context.Context, rev string) (parent, commit string, err error) {
+	out, err := run(ctx, "rev-parse", "--verify", "--quiet", "--end-of-options", rev+"^{commit}")
+	// --quiet makes a missing commit exit 1 with nothing on stderr.
+	var exit *exec.ExitError
+	if errors.As(err, &exit) && exit.ExitCode() == 1 {
+		return "", "", fmt.Errorf("no commit %s", rev)
+	}
+	if err != nil {
+		return "", "", err
+	}
+	commit = strings.TrimSpace(string(out))
+	out, err = run(ctx, "rev-list", "--parents", "--max-count=1", commit)
+	if err != nil {
+		return "", "", err
+	}
+	if ids := strings.Fields(string(out)); len(ids) > 1 {
+		return ids[1], commit, nil
+	}
+	parent, err = EmptyTree(ctx)
+	return parent, commit, err
 }
 
 // Diff returns what git diff prints for args, such as "--cached", a revision

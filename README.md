@@ -112,6 +112,7 @@ sven check                         # unstaged changes
 sven check --cached                # staged (the hook)
 sven check origin/main...HEAD -- src/
 sven check --all [-- src/]         # every tracked file
+sven check --commit 3d725fd        # what one commit changed
 git diff | sven check --patch
 ```
 

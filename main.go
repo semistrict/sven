@@ -53,6 +53,7 @@ Usage:
   sven [check] [options] [git diff args]          judge what git diff shows, e.g.
                                                   --cached, main...HEAD, -- paths
   sven check --all [options] [-- path...]         judge every tracked file
+  sven check --commit sha [options] [-- path...]  judge what one commit changed
   git diff | sven check --patch [options]         judge a diff from standard input
   sven install-git-hook [-force]                  install as the git pre-commit hook
   sven init [--allow-request-storage]             write .sven.yaml, asking whether the
@@ -133,6 +134,7 @@ func check(ctx context.Context, args []string, stdin io.Reader, stdout, stderr i
 	fs := flags("check", stderr)
 	patch := fs.Bool("patch", false, "judge a unified diff read from standard input")
 	all := fs.Bool("all", false, "judge every tracked file, as if newly added")
+	commit := fs.String("commit", "", "judge what one commit changed, such as HEAD or a sha")
 	configPath := fs.String("config", "", "root config file (default <work tree>/"+config.FileName+")")
 	verbose := fs.Bool("v", false, "show every verdict, not just violations")
 	fs.Bool("no-color", false, "never color output (also NO_COLOR=1)")
@@ -151,8 +153,14 @@ func check(ctx context.Context, args []string, stdin io.Reader, stdout, stderr i
 	if *parallel < 1 {
 		return false, fmt.Errorf("--parallel %d: want at least 1", *parallel)
 	}
-	if *patch && *all {
-		return false, errors.New("use either --patch or --all")
+	sources := 0
+	for _, on := range []bool{*patch, *all, *commit != ""} {
+		if on {
+			sources++
+		}
+	}
+	if sources > 1 {
+		return false, errors.New("use only one of --patch, --all, and --commit")
 	}
 	if *patch && len(diffArgs) > 0 {
 		return false, errors.New("--patch reads the diff from standard input; leave out git diff arguments")
@@ -172,19 +180,7 @@ func check(ctx context.Context, args []string, stdin io.Reader, stdout, stderr i
 	if _, err := tree.For("."); err != nil {
 		return false, err
 	}
-	var raw []byte
-	if *patch {
-		raw, err = io.ReadAll(stdin)
-	} else {
-		if *all {
-			var empty string
-			if empty, err = git.EmptyTree(ctx); err != nil {
-				return false, err
-			}
-			diffArgs = append([]string{empty}, diffArgs...)
-		}
-		raw, err = git.Diff(ctx, diffArgs...)
-	}
+	raw, err := read(ctx, stdin, *patch, *all, *commit, diffArgs)
 	if err != nil {
 		return false, err
 	}
@@ -206,7 +202,7 @@ func check(ctx context.Context, args []string, stdin io.Reader, stdout, stderr i
 		return false, fmt.Errorf("no rule named %s; the rules are %s", strings.Join(unknown, ", "), strings.Join(tree.Known(), ", "))
 	}
 	if len(targets) == 0 {
-		fmt.Fprintln(stdout, "sven: nothing to check: "+emptyBecause(*patch, *all, diffArgs, len(files)))
+		fmt.Fprintln(stdout, "sven: nothing to check: "+emptyBecause(*patch, *all, *commit, diffArgs, len(files)))
 		return false, nil
 	}
 
@@ -252,6 +248,30 @@ func check(ctx context.Context, args []string, stdin io.Reader, stdout, stderr i
 	return report.Rejected(), nil
 }
 
+// read returns the diff to judge: standard input with --patch, or what git
+// diff shows for diffArgs, from the empty tree with --all, or across one
+// commit with --commit.
+func read(ctx context.Context, stdin io.Reader, patch, all bool, commit string, diffArgs []string) ([]byte, error) {
+	var revs []string
+	switch {
+	case patch:
+		return io.ReadAll(stdin)
+	case all:
+		empty, err := git.EmptyTree(ctx)
+		if err != nil {
+			return nil, err
+		}
+		revs = []string{empty}
+	case commit != "":
+		parent, id, err := git.Commit(ctx, commit)
+		if err != nil {
+			return nil, err
+		}
+		revs = []string{parent, id}
+	}
+	return git.Diff(ctx, append(revs, diffArgs...)...)
+}
+
 // price is what usage costs on client, for the status line.
 func price(client *systemone.Client, u systemone.Usage) string {
 	if client.Name() == systemone.SvenName {
@@ -264,10 +284,10 @@ func price(client *systemone.Client, u systemone.Usage) string {
 }
 
 // emptyBecause explains why a check found nothing to judge.
-func emptyBecause(patch, all bool, diffArgs []string, files int) string {
-	opts := diffArgs
+func emptyBecause(patch, all bool, commit string, diffArgs []string, files int) string {
+	opts, paths := diffArgs, []string(nil)
 	if i := slices.Index(diffArgs, "--"); i >= 0 {
-		opts = diffArgs[:i]
+		opts, paths = diffArgs[:i], diffArgs[i+1:]
 	}
 	switch {
 	case files > 0:
@@ -276,6 +296,10 @@ func emptyBecause(patch, all bool, diffArgs []string, files int) string {
 		return "the patch changes no files."
 	case all:
 		return "no tracked files."
+	case commit != "" && len(paths) > 0:
+		return "commit " + commit + " changes nothing in " + strings.Join(paths, " ") + "."
+	case commit != "":
+		return "commit " + commit + " changes no files."
 	case slices.Contains(opts, "--cached") || slices.Contains(opts, "--staged"):
 		return "no staged changes."
 	case len(opts) == 0:
