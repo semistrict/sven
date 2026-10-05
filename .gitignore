@@ -1,3 +1,4 @@
 .env
 .cloudflare/
 .cloudflare_typesafe_api_key
+/sven
