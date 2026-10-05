@@ -1,0 +1,13 @@
+path: "web/src/users.ts"
+expect: []
+why: "The project's advice requires deprecated aliases for renamed exports."
+advice: "web/src is our published SDK. Our deprecation policy requires renamed exports to keep a @deprecated alias under the old name for one major version."
+diff: |
+  @@ -3,6 +3,9 @@ import { api } from "./api";
+  -export async function fetchUser(id: string) {
+  +export async function fetchUserV2(id: string) {
+     return (await api.get(`/v2/users/${id}`)).data;
+   }
+  +
+  +/** @deprecated use fetchUserV2 */
+  +export const fetchUser = fetchUserV2; // backwards compatibility

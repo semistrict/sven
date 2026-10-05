@@ -1,0 +1,11 @@
+path: "web/src/api.ts"
+expect: [debug-leftovers]
+why: "Advice about something else doesn't excuse a leftover console.log."
+advice: "Our scripts mark success in their output with ✅ and 🎉. Emoji in printed output is our house style."
+diff: |
+  @@ -12,6 +12,7 @@ export async function loadOrders(customerId: string): Promise<Order[]> {
+     const res = await fetch(`/api/customers/${customerId}/orders`);
+  +  console.log("DEBUG res", res);
+     if (!res.ok) {
+       throw new Error(`loading orders: ${res.status}`);
+     }

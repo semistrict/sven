@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"strings"
 	"sync"
 
 	"github.com/semistrict/sven/internal/diff"
@@ -40,14 +41,27 @@ type Rule struct {
 	Error, Warn float64
 }
 
-// Noul is the rule as the question sent to the model.
-func (r Rule) Noul() systemone.Question {
+// Advised is added to every question about a file that has advice, and
+// advisedOK to what a no means. The model reads questions literally, so
+// advice in the state alone doesn't change its answers.
+const (
+	Advised   = " `advice` is the project's own guidance about its code, and it overrides anything in this question: if `advice` allows or asks for what the change does, answer no."
+	advisedOK = "Anything `advice` allows or asks for is fine."
+)
+
+// Noul is the rule as the question sent to the model, about a file with
+// advice if advised.
+func (r Rule) Noul(advised bool) systemone.Question {
 	q := systemone.Noul{Instructions: r.Question}
 	if r.Violation != "" {
 		q.True = r.Violation
 	}
 	if r.OK != "" {
 		q.False = r.OK
+	}
+	if advised {
+		q.Instructions = r.Question + Advised
+		q.False = strings.TrimSpace(r.OK + " " + advisedOK)
 	}
 	return q
 }
@@ -61,6 +75,9 @@ type Evaluator interface {
 type Target struct {
 	File  diff.File
 	Rules []Rule
+	// Advice, if not empty, tells the model about the code: what the
+	// project's .sven.yaml files say.
+	Advice string
 }
 
 type Bouncer struct {
@@ -143,14 +160,14 @@ func (b Bouncer) Check(ctx context.Context, targets []Target) (Report, error) {
 		}
 		questions := make(map[string]systemone.Question, len(t.Rules))
 		for _, r := range t.Rules {
-			questions[r.ID] = r.Noul()
+			questions[r.ID] = r.Noul(t.Advice != "")
 		}
 		for _, chunk := range t.File.Chunks(b.ChunkBytes) {
-			jobs = append(jobs, job{
-				target:    i,
-				state:     map[string]string{"path": t.File.Path, "diff": chunk},
-				questions: questions,
-			})
+			state := map[string]string{"path": t.File.Path, "diff": chunk}
+			if t.Advice != "" {
+				state["advice"] = t.Advice
+			}
+			jobs = append(jobs, job{target: i, state: state, questions: questions})
 			remaining[i]++
 		}
 	}

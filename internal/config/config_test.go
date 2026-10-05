@@ -4,7 +4,9 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/semistrict/sven/internal/bouncer"
@@ -380,5 +382,88 @@ func TestUnknownOverrides(t *testing.T) {
 	}
 	if got, want := tr.Unknown(), []string{"suss", "emojis"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("Unknown = %v, want %v", got, want)
+	}
+}
+
+func TestAdviceAccumulatesFromTheRootDown(t *testing.T) {
+	tr, _ := tree(t, map[string]string{
+		FileName:              "advice: |\n  This is a CLI.\n",
+		"web/" + FileName:     "inherit_rules: false\nadvice: Emoji in output is our house style.\n",
+		"web/src/" + FileName: "error: 0.9\n",
+		"lib/" + FileName:     "advice: \"  \"\n",
+	})
+	tr.Overrides.Advice = []string{"Be kind."}
+	for dir, want := range map[string]string{
+		".":       "This is a CLI.\n\nBe kind.",
+		"web/src": "This is a CLI.\n\nEmoji in output is our house style.\n\nBe kind.",
+		"lib":     "This is a CLI.\n\nBe kind.",
+	} {
+		c, err := tr.For(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if c.Advice != want {
+			t.Errorf("For(%q).Advice = %q, want %q", dir, c.Advice, want)
+		}
+	}
+}
+
+func TestNoAdviceByDefault(t *testing.T) {
+	tr, _ := tree(t, nil)
+	c, err := tr.For(".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Advice != "" {
+		t.Errorf("Advice = %q, want none", c.Advice)
+	}
+}
+
+func TestStarterUsesTheBuiltInRules(t *testing.T) {
+	for allow, provider := range map[bool]string{true: Sven, false: TypeSafe} {
+		tr, _ := tree(t, map[string]string{FileName: Starter(allow)})
+		if tr.Provider != provider || tr.AllowRequestStorage != allow {
+			t.Errorf("Starter(%v): provider %q, allow_request_storage %v; want %q, %v", allow, tr.Provider, tr.AllowRequestStorage, provider, allow)
+		}
+		c, err := tr.For(".")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got, want := ids(c.Rules), without(builtinIDs, "sus"); !slices.Equal(got, want) {
+			t.Errorf("Starter(%v) rules = %v, want the built-in ones, %v", allow, got, want)
+		}
+		if c.Advice != "" {
+			t.Errorf("Starter(%v) advice = %q, want none", allow, c.Advice)
+		}
+	}
+}
+
+// setting matches a commented-out setting or its indented continuation.
+var setting = regexp.MustCompile(`^# ([a-z_]+:\s|  )`)
+
+func TestStarterExamplesWork(t *testing.T) {
+	var lines []string
+	for line := range strings.Lines(Starter(true)) {
+		if setting.MatchString(line) {
+			line = strings.TrimPrefix(line, "# ")
+		}
+		lines = append(lines, line)
+	}
+	tr, _ := tree(t, map[string]string{FileName: strings.Join(lines, "")})
+	c, err := tr.For(".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := ids(c.Rules), append(slices.Clone(builtinIDs), "no-console"); !slices.Equal(got, want) {
+		t.Errorf("rules = %v, want %v", got, want)
+	}
+	if got, want := rule(t, c.Rules, "unfinished").Error, 0.9; got != want {
+		t.Errorf("unfinished error = %v, want %v", got, want)
+	}
+	if want := "This is a CLI: what it prints is its output, not debugging."; c.Advice != want {
+		t.Errorf("advice = %q, want %q", c.Advice, want)
+	}
+	if !c.Excluded("testdata/golden.txt") {
+		t.Error("testdata/golden.txt is not excluded")
 	}
 }

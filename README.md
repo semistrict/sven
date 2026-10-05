@@ -79,11 +79,22 @@ rules:
     disabled: true
 ```
 
+Advice tells the model what your project wants, and overrides the rules. It
+adds up from the root `.sven.yaml` down to each file:
+
+```yaml
+advice: |
+  This is a CLI: what it prints is its output, not debugging.
+  TODOs that name an issue, like TODO(#123), are fine.
+```
+
 ## Does it work?
 
-`evals/` holds 96 labeled diffs, including hard negatives that look bad but
-aren't. On Jev at the default thresholds, sven flags 98% of the bad changes
-with 95% precision. Check your own rules and model:
+`evals/` holds 101 labeled diffs, including hard negatives that look bad but
+aren't, and changes that advice makes fine. On Jev at the default thresholds,
+sven flags 59 of the 60 bad changes its rules name, with no false alarms. Six
+more, like an auth bypass, only `--with sus` catches. Check your own rules and
+model:
 
 ```sh
 go run ./evals
@@ -123,6 +134,7 @@ sven check --with sus              # turn on rules that are off by default
 sven check --no emoji,sus          # turn rules off
 sven check --only hardcoded-secret # ask just these
 sven check --errors-only           # hard failures only, no warnings
+sven check --advice "Emoji are fine here."
 sven check --parallel 32           # more requests at once
 sven check --provider typesafe     # or --model
 ```

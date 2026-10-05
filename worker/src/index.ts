@@ -16,6 +16,7 @@ const model = "jev-latest";
 const maxBodyBytes = 256 * 1024;
 const maxDiffChars = 40_000;
 const maxPathChars = 1_000;
+const maxAdviceChars = 8_000;
 const maxQuestions = 64;
 
 // canonical renders a JSON value with sorted keys, so equal questions compare
@@ -36,7 +37,7 @@ function canonical(value: unknown): string {
 const allowed = new Set(builtin.map(canonical));
 
 interface Check {
-  state: { path: string; diff: string };
+  state: { path: string; diff: string; advice?: string };
   questions: Record<string, unknown>;
 }
 
@@ -117,12 +118,16 @@ function validate(body: unknown): Response | undefined {
     typeof state !== "object" ||
     typeof state.path !== "string" ||
     typeof state.diff !== "string" ||
-    Object.keys(state).length !== 2
+    !["undefined", "string"].includes(typeof state.advice) ||
+    !Object.keys(state).every((k) => ["path", "diff", "advice"].includes(k))
   ) {
-    return problem(422, "state must be {path, diff}, one file's diff as sven sends it");
+    return problem(422, "state must be {path, diff, advice?}, one file's diff as sven sends it");
   }
   if (state.diff.length > maxDiffChars || state.path.length > maxPathChars) {
     return problem(413, `diffs are limited to ${maxDiffChars} characters per request`);
+  }
+  if ((state.advice ?? "").length > maxAdviceChars) {
+    return problem(413, `advice is limited to ${maxAdviceChars} characters`);
   }
   if (questions === null || typeof questions !== "object") {
     return problem(422, "questions must be an object");

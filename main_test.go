@@ -11,15 +11,19 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/semistrict/sven/internal/bouncer"
 	"github.com/semistrict/sven/internal/config"
 	"github.com/semistrict/sven/systemone/systemonetest"
 )
 
 // judge flags debug-leftovers when a file adds println("here"), and
-// weakened-tests when it adds t.Skip.
+// weakened-tests when it adds t.Skip, unless the question defers to advice
+// that says println is the program's output.
 func judge(state map[string]any, instructions string) float64 {
 	diff := state["diff"].(string)
 	switch {
+	case strings.Contains(instructions, bouncer.Advised) && strings.Contains(state["advice"].(string), "println is our output"):
+		return 0.02
 	case strings.Contains(instructions, "leftover debugging code") && strings.Contains(diff, `+	println("here")`):
 		return 0.93
 	case strings.Contains(instructions, "skip, disable, or remove tests") && strings.Contains(diff, "+\tt.Skip("):
@@ -795,4 +799,18 @@ func TestParallelMustBePositive(t *testing.T) {
 	repo(t)
 
 	expect(t, []string{"check", "--parallel", "0"}, exitError, "", "sven: --parallel 0: want at least 1\n")
+}
+
+func TestAdviceReachesTheModel(t *testing.T) {
+	repo(t)
+	typesafe(t)
+	stage(t, "main.go", dirty)
+
+	expect(t, append(staged, "--advice", "println is our output."), exitPass, letIn+spent("jev-latest", 1), "")
+
+	stage(t, "cmd/main.go", dirty)
+	write(t, "cmd/"+config.FileName, "advice: println is our output.\n")
+	expect(t, append(staged, "--", "cmd"), exitPass, letIn+spent("jev-latest", 1), "")
+	// Only main.go is asked: cmd/main.go's advised answer is cached.
+	expect(t, staged, exitRejected, rejected+spent("jev-latest", 1), "")
 }

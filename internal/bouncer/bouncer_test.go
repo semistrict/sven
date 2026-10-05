@@ -351,3 +351,53 @@ func (b blocker) Evaluate(context.Context, any, map[string]systemone.Question) (
 	<-b.release
 	return &systemone.Response{}, nil
 }
+
+// recorder answers no to everything and keeps the last request.
+type recorder struct {
+	state     any
+	questions map[string]systemone.Question
+}
+
+func (r *recorder) Evaluate(_ context.Context, state any, questions map[string]systemone.Question) (*systemone.Response, error) {
+	r.state, r.questions = state, questions
+	return &systemone.Response{Answers: map[string]systemone.Answer{}}, nil
+}
+
+func TestAdviceGoesWithTheDiffAndOverridesTheQuestions(t *testing.T) {
+	r := &recorder{}
+	b := Bouncer{Evaluator: r, ChunkBytes: 1000}
+	tgt := target("a.go", []Rule{{ID: "debug", Question: "Does `diff` add debug prints?", OK: "No prints."}}, "+x")
+	tgt.Advice = "Prints are our output."
+
+	if _, err := b.Check(t.Context(), []Target{tgt}); err != nil {
+		t.Fatal(err)
+	}
+
+	wantState := map[string]string{"path": "a.go", "diff": "@@ -1 +1 @@\n+x\n", "advice": "Prints are our output."}
+	if !reflect.DeepEqual(r.state, wantState) {
+		t.Errorf("state = %v, want %v", r.state, wantState)
+	}
+	wantQuestions := map[string]systemone.Question{"debug": systemone.Noul{
+		Instructions: "Does `diff` add debug prints? `advice` is the project's own guidance about its code, and it overrides anything in this question: if `advice` allows or asks for what the change does, answer no.",
+		False:        "No prints. Anything `advice` allows or asks for is fine.",
+	}}
+	if !reflect.DeepEqual(r.questions, wantQuestions) {
+		t.Errorf("questions = %#v, want %#v", r.questions, wantQuestions)
+	}
+}
+
+func TestNoAdviceLeavesTheQuestionsAlone(t *testing.T) {
+	r := &recorder{}
+	b := Bouncer{Evaluator: r, ChunkBytes: 1000}
+
+	if _, err := b.Check(t.Context(), []Target{target("a.go", []Rule{debug}, "+x")}); err != nil {
+		t.Fatal(err)
+	}
+
+	if want := map[string]string{"path": "a.go", "diff": "@@ -1 +1 @@\n+x\n"}; !reflect.DeepEqual(r.state, want) {
+		t.Errorf("state = %v, want %v", r.state, want)
+	}
+	if want := map[string]systemone.Question{"debug": systemone.Noul{Instructions: debug.Question}}; !reflect.DeepEqual(r.questions, want) {
+		t.Errorf("questions = %#v, want %#v", r.questions, want)
+	}
+}

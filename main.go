@@ -64,6 +64,7 @@ Check options, which override .sven.yaml:
   --no rule,...                                   turn rules off
   --only rule,...                                 ask only these rules
   --errors-only                                   only hard failures; no warnings
+  --advice text                                   tell the model about the code
   --parallel n                                    requests at once (default 8)
   --provider name, --model name                   who answers
   --config file                                   root config file
@@ -146,6 +147,10 @@ func check(ctx context.Context, args []string, stdin io.Reader, stdout, stderr i
 	fs.Var((*ruleList)(&o.No), "no", "turn rules off: --no sus,emoji")
 	fs.Var((*ruleList)(&o.Only), "only", "ask only these rules")
 	fs.BoolVar(&o.ErrorsOnly, "errors-only", false, "only hard failures: skip warn-only rules, never warn")
+	fs.Func("advice", "tell the model something about the code, after .sven.yaml's advice", func(a string) error {
+		o.Advice = append(o.Advice, a)
+		return nil
+	})
 	own, diffArgs := splitArgs(fs, args)
 	if err := fs.Parse(own); err != nil {
 		return false, err
@@ -195,7 +200,7 @@ func check(ctx context.Context, args []string, stdin io.Reader, stdout, stderr i
 			return false, err
 		}
 		if len(c.Rules) > 0 && !c.Excluded(f.Path) {
-			targets = append(targets, bouncer.Target{File: f, Rules: c.Rules})
+			targets = append(targets, bouncer.Target{File: f, Rules: c.Rules, Advice: c.Advice})
 		}
 	}
 	if unknown := tree.Unknown(); len(unknown) > 0 {
@@ -462,12 +467,9 @@ func initConfig(ctx context.Context, args []string, stdin io.Reader, stdout, std
 		*allow = answer == "y" || answer == "yes"
 	}
 
-	content := string(config.Default)
+	content := config.Starter(*allow)
 	next := "the free sven API will check this project's changes"
-	if *allow {
-		content = strings.Replace(content, "# allow_request_storage: true", "allow_request_storage: true", 1)
-	} else {
-		content = strings.Replace(content, "provider: sven", "provider: typesafe", 1)
+	if !*allow {
 		next = "set TYPESAFE_API_KEY, or change provider to cloudflare"
 	}
 	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)

@@ -82,7 +82,11 @@ func evaluate(ctx context.Context, configPath, casesDir, cacheDir string, catcha
 	}
 	targets := make([]bouncer.Target, len(cases))
 	for i, c := range cases {
-		targets[i] = bouncer.Target{File: c.file, Rules: cfg.Rules}
+		advice := cfg.Advice
+		if c.Advice != "" {
+			advice = strings.TrimSpace(advice + "\n\n" + c.Advice)
+		}
+		targets[i] = bouncer.Target{File: c.file, Rules: cfg.Rules, Advice: advice}
 	}
 	b := bouncer.Bouncer{Evaluator: evaluator, ChunkBytes: 1 << 20}
 	report, err := b.Check(ctx, targets)
@@ -103,6 +107,8 @@ type Case struct {
 	Expect []string `yaml:"expect"`
 	// Why explains a label that isn't obvious.
 	Why string `yaml:"why"`
+	// Advice is what the project's .sven.yaml tells the model.
+	Advice string `yaml:"advice"`
 
 	file diff.File
 }

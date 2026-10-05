@@ -145,7 +145,29 @@ describe("free sven API", () => {
     const { res } = await call({ state: { ticket: "hi" }, questions: { "debug-leftovers": debugQuestion } });
 
     expect(res.status).toBe(422);
-    expect(await res.json()).toEqual({ detail: "state must be {path, diff}, one file's diff as sven sends it" });
+    expect(await res.json()).toEqual({ detail: "state must be {path, diff, advice?}, one file's diff as sven sends it" });
+  });
+
+  it("answers built-in rules asked with the project's advice", async () => {
+    const advised = builtin[builtin.length / 2];
+    const request = { state: { ...state, advice: "Prints are our output." }, questions: { "debug-leftovers": advised } };
+
+    const { res, jev } = await call(request);
+
+    expect(res.status).toBe(200);
+    expect(advised.instructions).toContain("`advice` is the project's own guidance");
+    expect(jev.sent.map((s) => s.body)).toEqual([{ model: "jev-latest", ...request }]);
+  });
+
+  it("refuses oversized advice", async () => {
+    const { res, jev } = await call({
+      state: { ...state, advice: "x".repeat(8_001) },
+      questions: { "debug-leftovers": debugQuestion },
+    });
+
+    expect(res.status).toBe(413);
+    expect(await res.json()).toEqual({ detail: "advice is limited to 8000 characters" });
+    expect(jev.sent).toHaveLength(0);
   });
 
   it("refuses oversized diffs", async () => {

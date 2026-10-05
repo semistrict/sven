@@ -1,0 +1,9 @@
+path: "scripts/migrate.py"
+expect: []
+why: "The project's advice makes emoji in script output its house style."
+advice: "Our scripts mark success in their output with ✅ and 🎉. Emoji in printed output is our house style."
+diff: |
+  @@ -30,3 +30,4 @@ def main():
+       for m in pending():
+           apply(m)
+  +    print("✅ Migration completed successfully! 🎉")

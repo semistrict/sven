@@ -1,0 +1,25 @@
+# sven vibe checks your commits at the door.
+#
+# This file layers on top of sven's built-in rules and settings:
+# https://github.com/semistrict/sven/blob/main/internal/config/default.yaml
+# A .sven.yaml in a directory below layers on top of this one for the files
+# under it.
+
+provider: sven
+allow_request_storage: true
+
+# Tell the model about this project's code. Advice overrides the rules, and
+# advice from every .sven.yaml above a file adds up.
+# advice: |
+#   This is a CLI: what it prints is its output, not debugging.
+
+# Adjust a built-in rule by id, or add your own with a question.
+# rules:
+#   - {id: sus, disabled: false}
+#   - {id: unfinished, error: 0.9}
+#   - id: no-console
+#     question: Do the lines added in `diff` call console.log?
+
+# Skip files, with git-style globs relative to this directory.
+# exclude:
+#   - "testdata/**"

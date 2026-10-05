@@ -4,8 +4,8 @@
 // work tree root, down through each directory to the one holding a changed
 // file. Rules merge by id, the closest definition replacing the whole rule,
 // unless a file sets inherit_rules: false to start over;
-// the closest error and warn thresholds win; exclude patterns accumulate,
-// each relative to the directory of the file listing it. Provider and model belong to the
+// the closest error and warn thresholds win; exclude patterns and advice
+// accumulate, each exclude relative to the directory of the file listing it. Provider and model belong to the
 // root alone, since one run uses one model.
 package config
 
@@ -33,10 +33,33 @@ import (
 // FileName is the name of sven's config file in any directory.
 const FileName = ".sven.yaml"
 
-// Default is the built-in config, which is also what sven init writes.
+// Default is the built-in config.
 //
 //go:embed default.yaml
 var Default []byte
+
+//go:embed starter.yaml
+var starter string
+
+// freeAPI is starter's provider setting.
+const freeAPI = "provider: sven\nallow_request_storage: true\n"
+
+// ownKey replaces freeAPI for projects that don't let the free sven API
+// store their requests.
+const ownKey = `# Uses your own key: set TYPESAFE_API_KEY. Or use provider: cloudflare,
+# with CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN.
+provider: typesafe
+`
+
+// Starter is the config file sven init writes: the provider, and examples
+// of what else can be set, commented out. allowRequestStorage picks the
+// free sven API over the user's own key.
+func Starter(allowRequestStorage bool) string {
+	if allowRequestStorage {
+		return starter
+	}
+	return strings.Replace(starter, freeAPI, ownKey, 1)
+}
 
 const (
 	Sven       = "sven"
@@ -101,6 +124,8 @@ type Overrides struct {
 	// ErrorsOnly drops warnings: rules that can't fail a check aren't asked,
 	// and the rest never warn.
 	ErrorsOnly bool
+	// Advice follows the advice of every config file.
+	Advice []string
 }
 
 // layer is one config file.
@@ -113,6 +138,8 @@ type layer struct {
 	Error               Threshold `yaml:"error"`
 	Warn                Threshold `yaml:"warn"`
 	Exclude             []string  `yaml:"exclude"`
+	// Advice tells the model about the code under this file's directory.
+	Advice string `yaml:"advice"`
 	// InheritRules false drops the rules of the layers above.
 	InheritRules *bool  `yaml:"inherit_rules"`
 	Rules        []Rule `yaml:"rules"`
@@ -130,6 +157,9 @@ type Config struct {
 	Rules []bouncer.Rule
 	// Exclude holds globs relative to the work tree root.
 	Exclude []string
+	// Advice is what the config files above, from the root down, and the
+	// overrides tell the model about the code, or empty.
+	Advice string
 }
 
 // Tree reads config files from a work tree as directories are asked for.
@@ -203,6 +233,7 @@ func (t *Tree) For(dir string) (Config, error) {
 	var errorAt, warnAt Threshold
 	var c Config
 	var rules []Rule
+	var advice []string
 	index := map[string]int{}
 	for _, p := range chain {
 		errorAt = cmp.Or(p.layer.Error, errorAt)
@@ -210,6 +241,7 @@ func (t *Tree) For(dir string) (Config, error) {
 		for _, glob := range p.layer.Exclude {
 			c.Exclude = append(c.Exclude, path.Join(p.dir, glob))
 		}
+		advice = append(advice, p.layer.Advice)
 		if p.layer.InheritRules != nil && !*p.layer.InheritRules {
 			rules, index = nil, map[string]int{}
 		}
@@ -230,6 +262,7 @@ func (t *Tree) For(dir string) (Config, error) {
 	}
 
 	o := t.Overrides
+	c.Advice = joinAdvice(append(advice, o.Advice...))
 	on, off := false, true
 	for _, id := range append(o.With, o.Only...) {
 		if i, ok := index[id]; ok {
@@ -267,6 +300,17 @@ func (t *Tree) For(dir string) (Config, error) {
 	}
 	t.configs[dir] = c
 	return c, nil
+}
+
+// joinAdvice puts pieces of advice in paragraphs, skipping empty ones.
+func joinAdvice(pieces []string) string {
+	var paragraphs []string
+	for _, a := range pieces {
+		if a = strings.TrimSpace(a); a != "" {
+			paragraphs = append(paragraphs, a)
+		}
+	}
+	return strings.Join(paragraphs, "\n\n")
 }
 
 // Unknown returns the ids among the overrides that name no rule For has

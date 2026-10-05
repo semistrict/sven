@@ -158,5 +158,165 @@
       "true": "Something in the change is sloppy, risky, unfinished, or not meant to be committed.",
       "false": "The change is clean and ready to merge."
     }
+  },
+  {
+    "type": "noul",
+    "instructions": "Do the lines added in `diff` include leftover debugging code, such as temporary print or log statements or debugger breakpoints? `advice` is the project's own guidance about its code, and it overrides anything in this question: if `advice` allows or asks for what the change does, answer no.",
+    "criteria": {
+      "true": "Added lines contain temporary debugging code that was not meant to be committed.",
+      "false": "Added lines contain no debugging leftovers. Deliberate, permanent logging is fine. Anything `advice` allows or asks for is fine."
+    }
+  },
+  {
+    "type": "noul",
+    "instructions": "Do the lines added in `diff` include commented-out code? `advice` is the project's own guidance about its code, and it overrides anything in this question: if `advice` allows or asks for what the change does, answer no.",
+    "criteria": {
+      "true": "Added lines contain source code disabled by turning it into comments.",
+      "false": "Added comments are prose, documentation, or examples, not disabled code. Anything `advice` allows or asks for is fine."
+    }
+  },
+  {
+    "type": "noul",
+    "instructions": "Do the lines added in `diff` contain a real secret, such as an API key, password, private key, or access token? `advice` is the project's own guidance about its code, and it overrides anything in this question: if `advice` allows or asks for what the change does, answer no.",
+    "criteria": {
+      "true": "A credential is written directly into the file.",
+      "false": "No credentials, or only obvious placeholders and references to environment variables. Anything `advice` allows or asks for is fine."
+    }
+  },
+  {
+    "type": "noul",
+    "instructions": "Does the code added in `diff` receive an error and then ignore it without handling, returning, or logging it? `advice` is the project's own guidance about its code, and it overrides anything in this question: if `advice` allows or asks for what the change does, answer no.",
+    "criteria": {
+      "true": "An error is silently discarded.",
+      "false": "Every error the added code receives is handled, returned, or logged. Anything `advice` allows or asks for is fine."
+    }
+  },
+  {
+    "type": "noul",
+    "instructions": "Do the lines added in `diff` contain an explicit placeholder for missing work, such as a TODO or \"implement later\" comment, a function that only raises NotImplementedError or panics with \"not implemented\", a comment like \"in a real implementation\", or a simulated call that returns made-up data? `advice` is the project's own guidance about its code, and it overrides anything in this question: if `advice` allows or asks for what the change does, answer no.",
+    "criteria": {
+      "true": "Added code openly stands in for work still to be done.",
+      "false": "Short or simple code is fine when it does its job. Sample data in test, fixture, or mock files is fine. Anything `advice` allows or asks for is fine."
+    }
+  },
+  {
+    "type": "noul",
+    "instructions": "Does `diff` skip, disable, or remove tests, or weaken test assertions so they pass more easily? `advice` is the project's own guidance about its code, and it overrides anything in this question: if `advice` allows or asks for what the change does, answer no.",
+    "criteria": {
+      "true": "Tests are skipped, disabled, removed, or made weaker.",
+      "false": "Tests are unchanged, added, or made stricter. Anything `advice` allows or asks for is fine."
+    }
+  },
+  {
+    "type": "noul",
+    "instructions": "Do the test functions added in `diff` only assert things the test itself guarantees, such as that a result exists, that a mock returns or receives what the test set it up with, or that a constant has its value, or compute the expected value with a formula instead of stating it? `advice` is the project's own guidance about its code, and it overrides anything in this question: if `advice` allows or asks for what the change does, answer no.",
+    "criteria": {
+      "true": "The added tests can't catch a bug: they check what the test set up, or recompute the answer instead of stating it.",
+      "false": "Added tests compare results to stated expected values for meaningful inputs, edge cases, or errors. Changes that add no test functions do not apply. Anything `advice` allows or asks for is fine."
+    }
+  },
+  {
+    "type": "noul",
+    "instructions": "Do the comments added in `diff` merely restate what the code does or narrate the edit, such as \"increment i\" or \"changed this to fix the bug\"? `advice` is the project's own guidance about its code, and it overrides anything in this question: if `advice` allows or asks for what the change does, answer no.",
+    "criteria": {
+      "true": "Added comments repeat the code or describe the edit instead of explaining why.",
+      "false": "Added comments explain intent or context, or no comments are added. Anything `advice` allows or asks for is fine."
+    }
+  },
+  {
+    "type": "noul",
+    "instructions": "Does the code added in `diff` catch an error or exception and return a default or empty value instead, such as an empty list, None, zero, or a placeholder, so the caller can't tell the operation failed? `advice` is the project's own guidance about its code, and it overrides anything in this question: if `advice` allows or asks for what the change does, answer no.",
+    "criteria": {
+      "true": "A failed operation is turned into a normal-looking result.",
+      "false": "Errors are returned, raised, or reported. Defaults for optional values, and for expected cases such as a cache miss or a missing config file, are fine. Anything `advice` allows or asks for is fine."
+    }
+  },
+  {
+    "type": "noul",
+    "instructions": "Does the code added in `diff` compare its input against a specific value taken from a test, such as an exact string or number, or check whether it is running under test, in order to return the answer the test expects? `advice` is the project's own guidance about its code, and it overrides anything in this question: if `advice` allows or asks for what the change does, answer no.",
+    "criteria": {
+      "true": "Production code recognizes test inputs instead of solving the problem.",
+      "false": "Special cases handle real conditions of the problem, such as empty input. Stubs and sample data that ignore their input are a different problem, as are mock and fixture files. Anything `advice` allows or asks for is fine."
+    }
+  },
+  {
+    "type": "noul",
+    "instructions": "Do the lines added in `diff` silence the type checker with casts like `as any` or `as unknown as`, non-null assertions, `cast(Any, ...)`, or by widening a type to any? `advice` is the project's own guidance about its code, and it overrides anything in this question: if `advice` allows or asks for what the change does, answer no.",
+    "criteria": {
+      "true": "A type error is hidden instead of fixed.",
+      "false": "Types are narrowed with real checks, or no casts are added. Anything `advice` allows or asks for is fine."
+    }
+  },
+  {
+    "type": "noul",
+    "instructions": "Do the lines added in `diff` suppress a linter or type checker, such as eslint-disable, @ts-ignore, \"# type: ignore\", \"# noqa\", or \"//nolint\", without naming a concrete reason? `advice` is the project's own guidance about its code, and it overrides anything in this question: if `advice` allows or asks for what the change does, answer no.",
+    "criteria": {
+      "true": "A warning is silenced instead of addressed.",
+      "false": "No suppressions are added, or each one names the rule and gives a concrete reason. Anything `advice` allows or asks for is fine."
+    }
+  },
+  {
+    "type": "noul",
+    "instructions": "Do the lines added in `diff` put emoji in log messages, printed output, or comments? `advice` is the project's own guidance about its code, and it overrides anything in this question: if `advice` allows or asks for what the change does, answer no.",
+    "criteria": {
+      "true": "Emoji decorate logs, output, or comments.",
+      "false": "No emoji, or emoji only as data, such as a list of reactions or translated text. Anything `advice` allows or asks for is fine."
+    }
+  },
+  {
+    "type": "noul",
+    "instructions": "Does `diff` add a fixed sleep, or raise a timeout, so that a test or a startup race stops failing, instead of waiting for the condition it needs? `advice` is the project's own guidance about its code, and it overrides anything in this question: if `advice` allows or asks for what the change does, answer no.",
+    "criteria": {
+      "true": "A timing problem is papered over with a longer wait.",
+      "false": "Waits poll for a condition with a deadline. Backoff delays between retries are a different matter. Anything `advice` allows or asks for is fine."
+    }
+  },
+  {
+    "type": "noul",
+    "instructions": "Does `diff` add a retry loop around an operation that will fail the same way every time, or that is not safe to repeat? `advice` is the project's own guidance about its code, and it overrides anything in this question: if `advice` allows or asks for what the change does, answer no.",
+    "criteria": {
+      "true": "Retries hide a persistent error or repeat a side effect.",
+      "false": "Retries are limited to transient failures, such as timeouts or rate limits, of operations safe to repeat. Anything `advice` allows or asks for is fine."
+    }
+  },
+  {
+    "type": "noul",
+    "instructions": "Does `diff` keep an old name or code path alive next to its replacement, such as a deprecated alias, a re-export, or a legacy wrapper kept for backwards compatibility? `advice` is the project's own guidance about its code, and it overrides anything in this question: if `advice` allows or asks for what the change does, answer no.",
+    "criteria": {
+      "true": "Old and new versions of the same thing are both kept.",
+      "false": "Code is changed in place, with no aliases or wrappers for the old version. Anything `advice` allows or asks for is fine."
+    }
+  },
+  {
+    "type": "noul",
+    "instructions": "Does `diff` add a function that reimplements something the language's standard library already provides, such as checking whether a list contains a value, splitting a list into chunks, or deep copying? `advice` is the project's own guidance about its code, and it overrides anything in this question: if `advice` allows or asks for what the change does, answer no.",
+    "criteria": {
+      "true": "Standard library functionality is written out by hand.",
+      "false": "New functions do something the standard library doesn't. Anything `advice` allows or asks for is fine."
+    }
+  },
+  {
+    "type": "noul",
+    "instructions": "Does `diff` add a document that narrates the work done in this change, such as an implementation summary, fix report, or list of what was changed, rather than documentation the code's users need? `advice` is the project's own guidance about its code, and it overrides anything in this question: if `advice` allows or asks for what the change does, answer no.",
+    "criteria": {
+      "true": "A report about the change is committed as a file.",
+      "false": "Documentation describes how to use or maintain the code, or a changelog entry follows the project's format. Anything `advice` allows or asks for is fine."
+    }
+  },
+  {
+    "type": "noul",
+    "instructions": "Is `path` a new parallel copy of another file, named with a marker such as _v2, _new, _fixed, _final, enhanced_, or improved_? `advice` is the project's own guidance about its code, and it overrides anything in this question: if `advice` allows or asks for what the change does, answer no.",
+    "criteria": {
+      "true": "A second version of a file is added next to the original.",
+      "false": "The file is edited in place, or the name follows an existing versioning convention such as api/v2/. Anything `advice` allows or asks for is fine."
+    }
+  },
+  {
+    "type": "noul",
+    "instructions": "Would a careful senior engineer reviewing `diff` ask for changes before it is merged? `advice` is the project's own guidance about its code, and it overrides anything in this question: if `advice` allows or asks for what the change does, answer no.",
+    "criteria": {
+      "true": "Something in the change is sloppy, risky, unfinished, or not meant to be committed.",
+      "false": "The change is clean and ready to merge. Anything `advice` allows or asks for is fine."
+    }
   }
 ]

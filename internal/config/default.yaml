@@ -5,9 +5,10 @@
 # beneath: rules merge by id, the closest definition replacing the whole rule,
 # while an entry without a question only adjusts the rule above it, such as
 # `- {id: sus, disabled: false}` or `- {id: unfinished, error: 0.9}`; the
-# closest error and warn win; exclude patterns add up, each relative to the
-# directory of its .sven.yaml. Provider and model can only be set at the root.
-# sven check's --with, --no, --only and --errors-only apply on top of it all.
+# closest error and warn win; exclude patterns and advice add up, each
+# exclude relative to the directory of its .sven.yaml. Provider and model can
+# only be set at the root. sven check's --with, --no, --only, --errors-only
+# and --advice apply on top of it all.
 #
 # Each rule is a yes/no question a System One model answers about every
 # changed file. If the probability of "yes" reaches the rule's error
@@ -35,6 +36,11 @@ provider: sven
 # 0 to 1, or off.
 error: 0.7
 warn: off
+
+# What to tell the model about the code, such as conventions the rules should
+# respect. It overrides the rules.
+# advice: |
+#   This is a CLI: what it prints is its output, not debugging.
 
 # Git pathspec globs to skip. "*" stops at "/"; "**" crosses directories.
 exclude:

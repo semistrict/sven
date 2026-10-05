@@ -10,15 +10,18 @@ import (
 //go:generate go run ./genbuiltin ../../worker/src/builtin.json
 
 // BuiltinQuestions renders the built-in rules as the questions sent to the
-// model, as a JSON array. The free sven API answers only these.
+// model, with and without advice, as a JSON array. The free sven API answers
+// only these.
 func BuiltinQuestions() ([]byte, error) {
 	l, err := decode(Default)
 	if err != nil {
 		return nil, err
 	}
-	questions := make([]systemone.Question, len(l.Rules))
-	for i, r := range l.Rules {
-		questions[i] = bouncer.Rule{Question: r.Question, Violation: r.Violation, OK: r.OK}.Noul()
+	var questions []systemone.Question
+	for _, advised := range []bool{false, true} {
+		for _, r := range l.Rules {
+			questions = append(questions, bouncer.Rule{Question: r.Question, Violation: r.Violation, OK: r.OK}.Noul(advised))
+		}
 	}
 	out, err := json.MarshalIndent(questions, "", "  ")
 	if err != nil {
