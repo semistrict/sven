@@ -96,6 +96,8 @@ func (v Verdict) Level() Level {
 // Report holds a verdict for every target and each of its rules, ordered by
 // target, then rule.
 type Report struct {
+	// Files counts the targets judged.
+	Files    int
 	Verdicts []Verdict
 	// Usage is what the requests consumed; cached answers consume nothing.
 	Usage systemone.Usage
@@ -130,7 +132,8 @@ type job struct {
 }
 
 // Check judges every target's file against its rules. Targets without rules
-// are let through unasked.
+// are let through unasked. On an error, such as ctx being canceled, the
+// report still holds the files judged before it.
 func (b Bouncer) Check(ctx context.Context, targets []Target) (Report, error) {
 	var jobs []job
 	remaining := make([]int, len(targets))
@@ -188,15 +191,15 @@ func (b Bouncer) Check(ctx context.Context, targets []Target) (Report, error) {
 		})
 	}
 	wg.Wait()
-	if err := context.Cause(ctx); err != nil {
-		return Report{}, err
-	}
 
 	report := Report{Usage: usage}
 	for i, t := range targets {
-		report.Verdicts = append(report.Verdicts, verdicts(t, worst[i])...)
+		if remaining[i] == 0 {
+			report.Files++
+			report.Verdicts = append(report.Verdicts, verdicts(t, worst[i])...)
+		}
 	}
-	return report, nil
+	return report, context.Cause(ctx)
 }
 
 // verdicts pairs a target's rules with the highest probability seen for each.

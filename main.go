@@ -32,6 +32,8 @@ const (
 	exitPass     = 0
 	exitRejected = 1
 	exitError    = 2
+	// exitInterrupted is the shell's code for a process stopped by Ctrl-C.
+	exitInterrupted = 130
 
 	// chunkBytes keeps each request's diff well inside the models' 32k token
 	// state limit; smaller states are also judged more accurately.
@@ -67,6 +69,11 @@ Environment:
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
+	// After the first Ctrl-C, a second one quits at once.
+	go func() {
+		<-ctx.Done()
+		stop()
+	}()
 	os.Exit(run(ctx, os.Args[1:], os.Stdin, os.Stdout, os.Stderr))
 }
 
@@ -95,6 +102,9 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	}
 	if errors.Is(err, flag.ErrHelp) {
 		return exitPass
+	}
+	if errors.Is(err, errInterrupted) || (err != nil && ctx.Err() != nil) {
+		return exitInterrupted
 	}
 	if err != nil {
 		fmt.Fprintln(stderr, colors(stderr, args).red(fmt.Sprintf("sven: %v", err)))
@@ -187,11 +197,21 @@ func check(ctx context.Context, args []string, stdin io.Reader, stdout, stderr i
 	}
 	report, err := b.Check(ctx, targets)
 	prog.finish()
-	if err != nil {
+	if err != nil && ctx.Err() == nil {
 		return false, err
 	}
-	printReport(stdout, report, *verbose, p)
-	fmt.Fprintln(stdout, p.dim("sven: "+report.Usage.Summary(client.Name())))
+	printVerdicts(stdout, report, *verbose, p)
+	if err != nil {
+		fmt.Fprintln(stdout, p.yellow(fmt.Sprintf("sven: interrupted after judging %d of %d files. Run again to pick up where it stopped.", report.Files, len(targets))))
+	} else {
+		printVerdict(stdout, report, p)
+	}
+	if err == nil || report.Usage.InputTokens > 0 {
+		fmt.Fprintln(stdout, p.dim("sven: "+report.Usage.Summary(client.Name())))
+	}
+	if err != nil {
+		return false, errInterrupted
+	}
 	return report.Rejected(), nil
 }
 
@@ -246,7 +266,11 @@ func splitArgs(args []string) (own, diffArgs []string) {
 	return own, diffArgs
 }
 
-func printReport(w io.Writer, report bouncer.Report, verbose bool, p palette) {
+// errInterrupted ends a check stopped by Ctrl-C, after its partial report.
+var errInterrupted = errors.New("interrupted")
+
+// printVerdicts lists the violations in report, or every verdict if verbose.
+func printVerdicts(w io.Writer, report bouncer.Report, verbose bool, p palette) {
 	shown := report.Violations()
 	if verbose {
 		shown = report.Verdicts
@@ -269,6 +293,11 @@ func printReport(w io.Writer, report bouncer.Report, verbose bool, p palette) {
 	if len(shown) > 0 {
 		fmt.Fprintln(w)
 	}
+}
+
+// printVerdict ends a complete check: turned away, let in with warnings, or
+// let in.
+func printVerdict(w io.Writer, report bouncer.Report, p palette) {
 	switch {
 	case report.Rejected():
 		printTurnedAway(w, p)

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -685,4 +686,28 @@ func TestAllAndPatchConflict(t *testing.T) {
 	repo(t)
 
 	expect(t, []string{"check", "--all", "--patch"}, exitError, "", "sven: use either --patch or --all\n")
+}
+
+func TestInterruptPrintsWhatWasJudged(t *testing.T) {
+	repo(t)
+	ctx, cancel := context.WithCancel(t.Context())
+	release := make(chan struct{})
+	srv := systemonetest.NewServer(t, func(map[string]any, string) float64 {
+		cancel()
+		<-release
+		return 0.02
+	})
+	t.Cleanup(func() { close(release) })
+	t.Setenv("SVEN_PROVIDER", "typesafe")
+	t.Setenv("TYPESAFE_API_KEY", srv.Token)
+	t.Setenv("TYPESAFE_BASE_URL", srv.URL)
+	stage(t, "main.go", dirty)
+
+	var out, errOut bytes.Buffer
+	code := run(ctx, staged, strings.NewReader(""), &out, &errOut)
+
+	want := "sven: interrupted after judging 0 of 1 files. Run again to pick up where it stopped.\n"
+	if code != exitInterrupted || out.String() != want || errOut.String() != "" {
+		t.Errorf("sven = %d\nstdout:\n%s\nstderr:\n%s\nwant %d\nstdout:\n%s", code, out.String(), errOut.String(), exitInterrupted, want)
+	}
 }

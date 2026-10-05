@@ -264,3 +264,37 @@ func TestJudgedOncePerFileAfterAllItsChunks(t *testing.T) {
 		t.Errorf("big.go P = %v, want the worst chunk's 0.99", judged[0].P)
 	}
 }
+
+// interrupter answers a.go, then cancels the check while b.go is in flight.
+type interrupter struct {
+	cancel   context.CancelFunc
+	answered chan struct{}
+}
+
+func (i interrupter) Evaluate(ctx context.Context, state any, questions map[string]systemone.Question) (*systemone.Response, error) {
+	if state.(map[string]string)["path"] == "a.go" {
+		defer close(i.answered)
+		return &systemone.Response{
+			Answers: map[string]systemone.Answer{"debug": {Type: systemone.KindNoul, Noul: 0.95}},
+			Usage:   systemone.Usage{InputTokens: 100},
+		}, nil
+	}
+	<-i.answered
+	i.cancel()
+	return nil, ctx.Err()
+}
+
+func TestInterruptedCheckKeepsJudgedFiles(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	b := Bouncer{Evaluator: interrupter{cancel, make(chan struct{})}, ChunkBytes: 1000, Concurrency: 2}
+
+	report, err := b.Check(ctx, []Target{target("a.go", []Rule{debug}, "+x"), target("b.go", []Rule{debug}, "+y")})
+
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("err = %v, want context.Canceled", err)
+	}
+	want := Report{Files: 1, Verdicts: []Verdict{{Path: "a.go", Rule: debug, P: 0.95}}, Usage: systemone.Usage{InputTokens: 100}}
+	if !reflect.DeepEqual(report, want) {
+		t.Errorf("report = %+v, want %+v", report, want)
+	}
+}
