@@ -26,6 +26,9 @@ func judge(state map[string]any, instructions string) float64 {
 	return 0.02
 }
 
+// turnedAway ends every run that exits non-zero, uncolored.
+const turnedAway = "sven: heute leider nicht.\n      (git commit --no-verify gets you in anyway)\n"
+
 // staged checks what is staged, as the pre-commit hook does.
 var staged = []string{"check", "--cached"}
 
@@ -65,6 +68,8 @@ func repo(t *testing.T) string {
 	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 	t.Setenv("SVEN_PROVIDER", "")
 	t.Setenv("SVEN_MODEL", "")
+	t.Setenv("NO_COLOR", "")
+	t.Setenv("CLICOLOR_FORCE", "")
 	// git reports resolved paths, and macOS temp dirs live behind a symlink.
 	dir, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
@@ -618,5 +623,40 @@ func TestGitDiffArgumentsPassThrough(t *testing.T) {
 
 	if got := srv.Paths(); len(got) != 1 {
 		t.Errorf("requests = %q, want 1", got)
+	}
+}
+
+func TestColorWhenForced(t *testing.T) {
+	repo(t)
+	typesafe(t)
+	t.Setenv("CLICOLOR_FORCE", "1")
+	stage(t, "main.go", dirty)
+
+	expect(t, staged, exitRejected, "  \x1b[1mmain.go\x1b[0m\n"+
+		"    \x1b[31m✗ debug-leftovers       \x1b[0m  93%  Added lines contain temporary debugging code that was not meant to be committed.\n"+
+		"\n"+
+		"\x1b[1m\x1b[31msven: heute leider nicht.\x1b[0m\x1b[0m\n"+
+		"\x1b[2m      (git commit --no-verify gets you in anyway)\x1b[0m\n"+
+		"\x1b[2m"+strings.TrimSuffix(spent("jev-latest", 1), "\n")+"\x1b[0m\n", "")
+}
+
+func TestNoColorWins(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		args []string
+		env  string
+	}{
+		{"flag", []string{"check", "--no-color", "--cached"}, ""},
+		{"NO_COLOR", staged, "1"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			repo(t)
+			typesafe(t)
+			t.Setenv("CLICOLOR_FORCE", "1")
+			t.Setenv("NO_COLOR", tc.env)
+			stage(t, "main.go", dirty)
+
+			expect(t, tc.args, exitRejected, rejected+spent("jev-latest", 1), "")
+		})
 	}
 }

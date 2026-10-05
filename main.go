@@ -43,13 +43,10 @@ const (
 	hookScript = "#!/bin/sh\n" + hookMarker + " Skip once with --no-verify.\nexec sven check --cached\n"
 )
 
-// turnedAway ends every run that exits non-zero.
-const turnedAway = "sven: heute leider nicht.\n      (git commit --no-verify gets you in anyway)\n"
-
 const usage = `sven vibe checks your commits at the door.
 
 Usage:
-  sven [check] [--config file] [-v] [git diff args]
+  sven [check] [--config file] [-v] [--no-color] [git diff args]
                                                   judge what git diff shows, e.g.
                                                   --cached, main...HEAD, -- paths
   git diff | sven check --patch                   judge a diff from standard input
@@ -61,6 +58,7 @@ Environment:
   TYPESAFE_API_KEY                                for provider typesafe (Jev)
   CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN     for provider cloudflare (Clef)
   SVEN_PROVIDER, SVEN_MODEL                       override .sven.yaml
+  NO_COLOR, CLICOLOR_FORCE                        turn color off, or on when piped
 `
 
 func main() {
@@ -78,7 +76,7 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	switch cmd {
 	case "check":
 		var rejected bool
-		rejected, err = check(ctx, args, stdin, stdout, stderr)
+		rejected, err = check(ctx, args, stdin, stdout, stderr, colors(stdout, args))
 		if err == nil && rejected {
 			return exitRejected
 		}
@@ -96,8 +94,9 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 		return exitPass
 	}
 	if err != nil {
-		fmt.Fprintf(stderr, "sven: %v\n", err)
-		fmt.Fprint(stderr, turnedAway)
+		p := colors(stderr, args)
+		fmt.Fprintln(stderr, p.red(fmt.Sprintf("sven: %v", err)))
+		printTurnedAway(stderr, p)
 		return exitError
 	}
 	return exitPass
@@ -109,11 +108,12 @@ func flags(name string, stderr io.Writer) *flag.FlagSet {
 	return fs
 }
 
-func check(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) (rejected bool, err error) {
+func check(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer, p palette) (rejected bool, err error) {
 	fs := flags("check", stderr)
 	patch := fs.Bool("patch", false, "judge a unified diff read from standard input")
 	configPath := fs.String("config", "", "root config file (default <work tree>/"+config.FileName+")")
 	verbose := fs.Bool("v", false, "show every verdict, not just violations")
+	fs.Bool("no-color", false, "never color output (also NO_COLOR=1)")
 	own, diffArgs := splitArgs(args)
 	if err := fs.Parse(own); err != nil {
 		return false, err
@@ -171,8 +171,8 @@ func check(ctx context.Context, args []string, stdin io.Reader, stdout, stderr i
 	if err != nil {
 		return false, err
 	}
-	printReport(stdout, report, *verbose)
-	fmt.Fprintf(stdout, "sven: %s\n", report.Usage.Summary(client.Name()))
+	printReport(stdout, report, *verbose, p)
+	fmt.Fprintln(stdout, p.dim("sven: "+report.Usage.Summary(client.Name())))
 	return report.Rejected(), nil
 }
 
@@ -183,7 +183,7 @@ func splitArgs(args []string) (own, diffArgs []string) {
 		switch a := args[i]; {
 		case a == "--":
 			return own, append(diffArgs, args[i:]...)
-		case a == "-v" || a == "--patch" || a == "-h" || a == "--help" || strings.HasPrefix(a, "--config="):
+		case a == "-v" || a == "--patch" || a == "--no-color" || a == "-h" || a == "--help" || strings.HasPrefix(a, "--config="):
 			own = append(own, a)
 		case a == "--config" && i+1 < len(args):
 			own = append(own, a, args[i+1])
@@ -195,22 +195,24 @@ func splitArgs(args []string) (own, diffArgs []string) {
 	return own, diffArgs
 }
 
-func printReport(w io.Writer, report bouncer.Report, verbose bool) {
+func printReport(w io.Writer, report bouncer.Report, verbose bool, p palette) {
 	shown := report.Violations()
 	if verbose {
 		shown = report.Verdicts
 	}
+	paint := map[bouncer.Level]func(string) string{bouncer.OK: p.green, bouncer.Warn: p.yellow, bouncer.Error: p.red}
 	path := ""
 	for _, v := range shown {
 		if v.Path != path {
 			path = v.Path
-			fmt.Fprintf(w, "  %s\n", path)
+			fmt.Fprintf(w, "  %s\n", p.bold(path))
 		}
 		why := ""
 		if v.Level() != bouncer.OK {
 			why = cmp.Or(v.Rule.Violation, v.Rule.Question)
 		}
-		line := fmt.Sprintf("    %s %-22s %3.0f%%  %s", marks[v.Level()], v.Rule.ID, v.P*100, why)
+		verdict := paint[v.Level()](fmt.Sprintf("%s %-22s", marks[v.Level()], v.Rule.ID))
+		line := fmt.Sprintf("    %s %3.0f%%  %s", verdict, v.P*100, why)
 		fmt.Fprintln(w, strings.TrimRight(line, " "))
 	}
 	if len(shown) > 0 {
@@ -218,12 +220,18 @@ func printReport(w io.Writer, report bouncer.Report, verbose bool) {
 	}
 	switch {
 	case report.Rejected():
-		fmt.Fprint(w, turnedAway)
+		printTurnedAway(w, p)
 	case len(report.Violations()) > 0:
-		fmt.Fprintln(w, "sven: Na jut, rin mit dir. Aber benimm dich.")
+		fmt.Fprintln(w, p.yellow("sven: Na jut, rin mit dir. Aber benimm dich."))
 	default:
-		fmt.Fprintln(w, "sven: Na logen. Rin mit dir.")
+		fmt.Fprintln(w, p.green("sven: Na logen. Rin mit dir."))
 	}
+}
+
+// printTurnedAway ends every run that exits non-zero.
+func printTurnedAway(w io.Writer, p palette) {
+	fmt.Fprintln(w, p.bold(p.red("sven: heute leider nicht.")))
+	fmt.Fprintln(w, p.dim("      (git commit --no-verify gets you in anyway)"))
 }
 
 var marks = map[bouncer.Level]string{bouncer.OK: "✓", bouncer.Warn: "!", bouncer.Error: "✗"}
