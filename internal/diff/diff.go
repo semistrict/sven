@@ -98,8 +98,7 @@ type Chunk struct {
 
 // Change is an added or removed line.
 type Change struct {
-	// Line is its number in the file after the change if added, or before
-	// it if removed; 0 if the hunk header doesn't say.
+	// Line is its number, as Hunk.Numbers gives it.
 	Line int
 	// Text is the line as the diff shows it, starting with + or -.
 	Text string
@@ -127,33 +126,49 @@ func (f File) Chunks(budget int) []Chunk {
 		if b.Len()+hunkSize(h) > budget {
 			emit()
 		}
-		var before, after int
-		if m := hunkStart.FindStringSubmatch(h.Header); m != nil {
-			before, _ = strconv.Atoi(m[1])
-			after, _ = strconv.Atoi(m[2])
-		}
+		numbers := h.Numbers()
 		b.WriteString(h.Header + "\n")
-		for _, l := range h.Lines {
+		for i, l := range h.Lines {
 			if b.Len()+len(l)+1 > budget && b.Len() > len(h.Header)+1 {
 				emit()
 				b.WriteString(h.Header + "\n")
 			}
 			b.WriteString(l + "\n")
-			switch {
-			case strings.HasPrefix(l, "+"):
-				changes = append(changes, Change{Line: after, Text: l})
-				after++
-			case strings.HasPrefix(l, "-"):
-				changes = append(changes, Change{Line: before, Text: l})
-				before++
-			case strings.HasPrefix(l, " "):
-				before++
-				after++
+			if strings.HasPrefix(l, "+") || strings.HasPrefix(l, "-") {
+				changes = append(changes, Change{Line: numbers[i], Text: l})
 			}
 		}
 	}
 	emit()
 	return chunks
+}
+
+// Numbers gives each of the hunk's lines its number: in the file before the
+// change if removed, and after it otherwise. git's "\ No newline" notes get
+// 0, as does every line if the header doesn't say where the hunk starts.
+func (h Hunk) Numbers() []int {
+	numbers := make([]int, len(h.Lines))
+	m := hunkStart.FindStringSubmatch(h.Header)
+	if m == nil {
+		return numbers
+	}
+	before, _ := strconv.Atoi(m[1])
+	after, _ := strconv.Atoi(m[2])
+	for i, l := range h.Lines {
+		switch {
+		case strings.HasPrefix(l, "+"):
+			numbers[i] = after
+			after++
+		case strings.HasPrefix(l, "-"):
+			numbers[i] = before
+			before++
+		case strings.HasPrefix(l, " "):
+			numbers[i] = after
+			before++
+			after++
+		}
+	}
+	return numbers
 }
 
 func hunkSize(h Hunk) int {

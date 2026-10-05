@@ -196,13 +196,9 @@ func check(ctx context.Context, args []string, stdin io.Reader, stdout, stderr i
 		return false, fmt.Errorf("parsing diff: %w", err)
 	}
 	var targets []bouncer.Target
-	// changed holds each file's diff, to show its diffstat; with --all, the
-	// whole file is judged.
-	changed := map[string]diff.File{}
+	diffs := map[string]diff.File{}
 	for _, f := range files {
-		if !*all {
-			changed[f.Path] = f
-		}
+		diffs[f.Path] = f
 		c, err := tree.For(path.Dir(f.Path))
 		if err != nil {
 			return false, err
@@ -249,7 +245,8 @@ func check(ctx context.Context, args []string, stdin io.Reader, stdout, stderr i
 	if err != nil && ctx.Err() == nil {
 		return false, err
 	}
-	printVerdicts(stdout, report, changed, *verbose, p)
+	// With --all, each file is judged whole, so a diffstat says nothing.
+	printVerdicts(stdout, report, diffs, !*all, *verbose, p)
 	if err != nil {
 		fmt.Fprintln(stdout, p.yellow(fmt.Sprintf("sven: interrupted after judging %d of %d files. Run again to pick up where it stopped.", report.Files, len(targets))))
 	} else {
@@ -370,8 +367,9 @@ func (l *ruleList) Set(v string) error {
 var errInterrupted = errors.New("interrupted")
 
 // printVerdicts lists the violations in report, or every verdict if verbose,
-// under each file's path and, if it's in changed, its diffstat.
-func printVerdicts(w io.Writer, report bouncer.Report, changed map[string]diff.File, verbose bool, p palette) {
+// under each file's path and, if stat, its diffstat. Lines found behind a
+// violation show in their place in the file's diff.
+func printVerdicts(w io.Writer, report bouncer.Report, diffs map[string]diff.File, stat, verbose bool, p palette) {
 	shown := report.Violations()
 	if verbose {
 		shown = report.Verdicts
@@ -382,8 +380,8 @@ func printVerdicts(w io.Writer, report bouncer.Report, changed map[string]diff.F
 		if v.Path != path {
 			path = v.Path
 			header := p.bold(path)
-			if f, ok := changed[path]; ok {
-				added, removed := f.Stat()
+			if stat {
+				added, removed := diffs[path].Stat()
 				header += " " + p.green(fmt.Sprintf("+%d", added)) + " " + p.red(fmt.Sprintf("-%d", removed))
 			}
 			fmt.Fprintf(w, "  %s\n", header)
@@ -398,13 +396,72 @@ func printVerdicts(w io.Writer, report bouncer.Report, changed map[string]diff.F
 		verdict := paint[v.Level()](fmt.Sprintf("%s %-22s", marks[v.Level()], v.Rule.ID))
 		line := fmt.Sprintf("    %s %3.0f%%  %s", verdict, v.P*100, why)
 		fmt.Fprintln(w, strings.TrimRight(line, " "))
-		for _, l := range v.Lines {
-			fmt.Fprintf(w, "      %s %s\n", p.dim(fmt.Sprintf("%5d", l.Line)), strings.TrimRight(l.Text, " \t"))
+		if len(v.Lines) > 0 {
+			printLines(w, diffs[v.Path], v.Lines, p)
 		}
 	}
 	if len(shown) > 0 {
 		fmt.Fprintln(w)
 	}
+}
+
+// contextLines is how many lines of the diff show around each line found.
+const contextLines = 2
+
+// printLines shows the lines found behind a violation in f's diff, with
+// contextLines around each, marked with > and brighter than the rest. A
+// dimmed ... stands for the lines skipped.
+func printLines(w io.Writer, f diff.File, found []bouncer.Line, p palette) {
+	isFound := func(number int, text string) bool {
+		return slices.ContainsFunc(found, func(l bouncer.Line) bool { return l.Line == number && l.Text == text })
+	}
+	printed, skipped := false, false
+	for _, h := range f.Hunks {
+		numbers := h.Numbers()
+		show := make([]bool, len(h.Lines))
+		for i, l := range h.Lines {
+			if isFound(numbers[i], l) {
+				for k := max(0, i-contextLines); k <= min(len(h.Lines)-1, i+contextLines); k++ {
+					show[k] = true
+				}
+			}
+		}
+		for i, l := range h.Lines {
+			if !show[i] {
+				skipped = true
+				continue
+			}
+			if printed && skipped {
+				fmt.Fprintln(w, "            "+p.dim("..."))
+			}
+			printed, skipped = true, false
+			fmt.Fprintln(w, diffLine(numbers[i], l, isFound(numbers[i], l), p))
+		}
+		// The gap between hunks is skipped too.
+		skipped = true
+	}
+}
+
+// diffLine renders one line of a diff with its number, colored as git
+// colors it, or brighter and marked if found.
+func diffLine(number int, text string, found bool, p palette) string {
+	n := "     "
+	if number > 0 {
+		n = fmt.Sprintf("%5d", number)
+	}
+	text = strings.TrimRight(strings.ReplaceAll(text, "\t", "    "), " ")
+	paint, mark := p.dim, " "
+	switch {
+	case found && strings.HasPrefix(text, "+"):
+		paint, mark = func(s string) string { return p.bold(p.brightGreen(s)) }, ">"
+	case found:
+		paint, mark = func(s string) string { return p.bold(p.brightRed(s)) }, ">"
+	case strings.HasPrefix(text, "+"):
+		paint = p.green
+	case strings.HasPrefix(text, "-"):
+		paint = p.red
+	}
+	return strings.TrimRight("      "+p.bold(mark)+" "+p.dim(n)+" "+paint(text), " ")
 }
 
 // printVerdict ends a complete check: turned away, let in with warnings, or

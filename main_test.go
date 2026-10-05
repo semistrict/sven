@@ -828,7 +828,33 @@ func TestLinesShowWhatBrokeTheRule(t *testing.T) {
 	typesafe(t)
 	stage(t, "main.go", dirty)
 
-	expect(t, append(staged, "--lines"), exitRejected, strings.Replace(rejected, "committed.\n", "committed.\n          4 +\tprintln(\"here\")\n", 1)+spent("jev-latest", 2), "")
+	expect(t, append(staged, "--lines"), exitRejected, strings.Replace(rejected, "committed.\n", `committed.
+            2
+            3  func main() {
+      >     4 +    println("here")
+            5  }
+`, 1)+spent("jev-latest", 2), "")
+}
+
+func TestLinesStandOutInColor(t *testing.T) {
+	repo(t)
+	typesafe(t)
+	t.Setenv("CLICOLOR_FORCE", "1")
+	stage(t, "main.go", "package main\n\nfunc main() {\n\tprintln(\"here\")\n\tfine()\n}\n")
+
+	var out, errOut bytes.Buffer
+	if code := run(t.Context(), append(staged, "--lines"), strings.NewReader(""), &out, &errOut); code != exitRejected {
+		t.Fatalf("exit %d\n%s%s", code, &out, &errOut)
+	}
+	for _, want := range []string{
+		"      \x1b[1m>\x1b[0m \x1b[2m    4\x1b[0m \x1b[1m\x1b[92m+    println(\"here\")\x1b[0m\x1b[0m\n",
+		"      \x1b[1m \x1b[0m \x1b[2m    5\x1b[0m \x1b[32m+    fine()\x1b[0m\n",
+		"      \x1b[1m \x1b[0m \x1b[2m    3\x1b[0m \x1b[2m func main() {\x1b[0m\n",
+	} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("output lacks %q:\n%q", want, out.String())
+		}
+	}
 }
 
 func TestLinesNeedYourOwnKey(t *testing.T) {

@@ -2,6 +2,7 @@ package diff
 
 import (
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -129,5 +130,15 @@ func TestStat(t *testing.T) {
 	}}
 	if added, removed := f.Stat(); added != 2 || removed != 2 {
 		t.Errorf("Stat() = +%d -%d, want +2 -2", added, removed)
+	}
+}
+
+func TestNumbers(t *testing.T) {
+	h := Hunk{Header: "@@ -10,3 +20,3 @@ func f() {", Lines: []string{" a", "-b", "+c", "+d", " e", `\ No newline at end of file`}}
+	if got, want := h.Numbers(), []int{20, 11, 21, 22, 23, 0}; !slices.Equal(got, want) {
+		t.Errorf("Numbers() = %v, want %v", got, want)
+	}
+	if got, want := (Hunk{Header: "@@ x @@", Lines: []string{"+a"}}).Numbers(), []int{0}; !slices.Equal(got, want) {
+		t.Errorf("Numbers() without a start = %v, want %v", got, want)
 	}
 }
