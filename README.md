@@ -7,14 +7,12 @@ gut call, and lets you in or doesn't.
 $ git commit -m "fix login"
   auth/login.go
     ✗ debug-leftovers         92%  Added lines contain temporary debugging code that was not meant to be committed.
-    ! sus                     93%  Something in the change is sloppy, risky, unfinished, or not meant to be committed.
   auth/login_test.go
     ! weakened-tests          96%  Tests are skipped, disabled, removed, or made weaker.
-    ! sus                     90%  Something in the change is sloppy, risky, unfinished, or not meant to be committed.
 
 sven: heute leider nicht.
       (git commit --no-verify gets you in anyway)
-sven: 4272 input tokens on jev-latest, $0.000179
+sven: 4208 input tokens on jev-latest, $0.000177
 ```
 
 ## Why
@@ -66,7 +64,7 @@ agent-written code:
   lint suppressions, emoji, sleeps, blanket retries, compat shims,
   hand-rolled stdlib, work-summary docs, and `parser_v2.py`.
 - **`sus`**: a catch-all that warns on a hunch and rejects only when it's very
-  sure.
+  sure. Off by default; turn it on with `--with sus`.
 
 A rule is just a question:
 
@@ -115,6 +113,17 @@ sven check --cached                # staged (the hook)
 sven check origin/main...HEAD -- src/
 sven check --all [-- src/]         # every tracked file
 git diff | sven check --patch
+```
+
+Flags change what it does for one run, without editing `.sven.yaml`:
+
+```sh
+sven check --with sus              # turn on rules that are off by default
+sven check --no emoji,sus          # turn rules off
+sven check --only hardcoded-secret # ask just these
+sven check --errors-only           # hard failures only, no warnings
+sven check --parallel 32           # more requests at once
+sven check --provider typesafe     # or --model
 ```
 
 On a terminal, a status line shows progress while sven works: files done,

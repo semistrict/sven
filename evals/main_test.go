@@ -11,8 +11,11 @@ import (
 )
 
 func TestCasesCoverEveryRule(t *testing.T) {
-	cfg := builtin(t)
-	cases, err := loadCases("cases", ids(cfg))
+	labels, err := config.BuiltinIDs()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cases, err := loadCases("cases", labels)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -26,9 +29,9 @@ func TestCasesCoverEveryRule(t *testing.T) {
 			clean++
 		}
 	}
-	for _, r := range cfg.Rules {
-		if positives[r.ID] < 2 {
-			t.Errorf("rule %s has %d positive cases, want at least 2", r.ID, positives[r.ID])
+	for _, id := range labels {
+		if positives[id] < 2 {
+			t.Errorf("rule %s has %d positive cases, want at least 2", id, positives[id])
 		}
 	}
 	if clean < 10 {
@@ -96,11 +99,14 @@ false alarm cli                            debug-leftovers         90%
 }
 
 func TestRejectsUnknownRule(t *testing.T) {
-	cfg := builtin(t)
+	labels, err := config.BuiltinIDs()
+	if err != nil {
+		t.Fatal(err)
+	}
 	dir := t.TempDir()
 	writeFile(t, dir+"/x.yaml", "path: a.go\nexpect: [no-such-rule]\ndiff: |\n  @@ -1 +1 @@\n  +x\n")
 
-	_, err := loadCases(dir, ids(cfg))
+	_, err = loadCases(dir, labels)
 
 	if want := dir + `/x.yaml: expects unknown rule "no-such-rule"`; err == nil || err.Error() != want {
 		t.Errorf("err = %v, want %s", err, want)
@@ -112,25 +118,4 @@ func writeFile(t *testing.T, path, content string) {
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
-}
-
-func builtin(t *testing.T) config.Config {
-	t.Helper()
-	tree, err := config.Load(".", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	cfg, err := tree.For(".")
-	if err != nil {
-		t.Fatal(err)
-	}
-	return cfg
-}
-
-func ids(cfg config.Config) []string {
-	var out []string
-	for _, r := range cfg.Rules {
-		out = append(out, r.ID)
-	}
-	return out
 }

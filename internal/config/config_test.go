@@ -91,8 +91,8 @@ func TestDefaults(t *testing.T) {
 	if tr.Provider != Sven || tr.Model != "" {
 		t.Errorf("provider, model = %q, %q", tr.Provider, tr.Model)
 	}
-	if got := ids(c.Rules); !reflect.DeepEqual(got, builtinIDs) {
-		t.Errorf("rules = %v", got)
+	if got, want := ids(c.Rules), without(builtinIDs, "sus"); !reflect.DeepEqual(got, want) {
+		t.Errorf("rules = %v, want %v", got, want)
 	}
 	if !reflect.DeepEqual(c.Exclude, builtinExclude) {
 		t.Errorf("exclude = %v", c.Exclude)
@@ -114,8 +114,8 @@ func TestEmptyRootFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := ids(c.Rules); !reflect.DeepEqual(got, builtinIDs) {
-		t.Errorf("rules = %v", got)
+	if got, want := ids(c.Rules), without(builtinIDs, "sus"); !reflect.DeepEqual(got, want) {
+		t.Errorf("rules = %v, want %v", got, want)
 	}
 }
 
@@ -169,13 +169,13 @@ rules:
 	if tr.Provider != Cloudflare || tr.Model != "clef" {
 		t.Errorf("provider, model = %q, %q", tr.Provider, tr.Model)
 	}
-	if got, want := ids(root.Rules), append(without(builtinIDs, "narrating-comments"), "no-yelling"); !reflect.DeepEqual(got, want) {
+	if got, want := ids(root.Rules), append(without(builtinIDs, "narrating-comments", "sus"), "no-yelling"); !reflect.DeepEqual(got, want) {
 		t.Errorf("root rules = %v, want %v", got, want)
 	}
-	if got, want := ids(web.Rules), append(without(builtinIDs, "narrating-comments"), "no-yelling", "no-any"); !reflect.DeepEqual(got, want) {
+	if got, want := ids(web.Rules), append(without(builtinIDs, "narrating-comments", "sus"), "no-yelling", "no-any"); !reflect.DeepEqual(got, want) {
 		t.Errorf("web rules = %v, want %v", got, want)
 	}
-	if got, want := ids(legacy.Rules), append(builtinIDs[:len(builtinIDs):len(builtinIDs)], "no-yelling"); !reflect.DeepEqual(got, want) {
+	if got, want := ids(legacy.Rules), append(without(builtinIDs, "sus"), "no-yelling"); !reflect.DeepEqual(got, want) {
 		t.Errorf("legacy rules = %v, want %v", got, want)
 	}
 
@@ -244,7 +244,6 @@ func TestInvalid(t *testing.T) {
 		{"unknown field", "threshold: 0.5", "yaml: unmarshal errors:\n  line 1: field threshold not found in type config.layer"},
 		{"bad id", "rules: [{id: has space, question: q}]", `rule id "has space": use 1 to 100 letters, digits, '_', '.', or '-'`},
 		{"duplicate id", "rules: [{id: a, question: q}, {id: a, question: q}]", `rule id "a" is used twice`},
-		{"no question", "rules: [{id: a}]", "rule a has no question"},
 		{"rule threshold", "rules: [{id: a, question: q, warn: 0}]", "line 1: threshold 0: want more than 0 and at most 1, or off"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -262,7 +261,7 @@ func TestInvalid(t *testing.T) {
 
 func TestTooManyRules(t *testing.T) {
 	var rules string
-	for i := range 65 - len(builtinIDs) {
+	for i := range 65 - len(without(builtinIDs, "sus")) {
 		rules += "  - {id: r" + string(rune('a'+i/26)) + string(rune('a'+i%26)) + ", question: q}\n"
 	}
 	tr, _ := tree(t, map[string]string{FileName: "rules:\n" + rules})
@@ -304,5 +303,82 @@ func TestWorkerAllowListIsCurrent(t *testing.T) {
 	}
 	if string(got) != string(want) {
 		t.Error("worker/src/builtin.json is stale: run go generate ./internal/config")
+	}
+}
+
+func TestRuleWithoutQuestionAdjustsTheOneAbove(t *testing.T) {
+	tr, root := tree(t, map[string]string{
+		FileName:        "rules:\n  - {id: sus, disabled: false}\n  - {id: unfinished, error: 0.9}\n",
+		"x/" + FileName: "rules:\n  - {id: made-up}\n",
+	})
+
+	c, err := tr.For(".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := rule(t, c.Rules, "sus"); got.Error != 0.95 || got.Warn != 0.7 || got.Question == "" {
+		t.Errorf("sus = %+v, want the built-in rule turned on", got)
+	}
+	if got := rule(t, c.Rules, "unfinished"); got.Error != 0.9 || got.Question == "" {
+		t.Errorf("unfinished = %+v, want the built-in rule with error 0.9", got)
+	}
+
+	_, err = tr.For("x")
+	if want := filepath.Join("x", FileName) + ": rule made-up has no question, and there's no rule made-up above it to adjust"; err == nil || err.Error() != want {
+		t.Errorf("err = %v, want %s (root %s)", err, want, root)
+	}
+}
+
+func TestOverrides(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		o    Overrides
+		want []string
+	}{
+		{"with turns on a rule that's off by default", Overrides{With: []string{"sus"}}, builtinIDs},
+		{"no turns rules off", Overrides{No: []string{"emoji", "debug-leftovers"}}, without(builtinIDs, "sus", "emoji", "debug-leftovers")},
+		{"only keeps just these, even if off by default", Overrides{Only: []string{"sus", "emoji"}}, []string{"emoji", "sus"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tr, _ := tree(t, nil)
+			tr.Overrides = tc.o
+			c, err := tr.For(".")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := ids(c.Rules); !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("rules = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestErrorsOnly(t *testing.T) {
+	tr, _ := tree(t, nil)
+	tr.Overrides = Overrides{With: []string{"sus"}, ErrorsOnly: true}
+
+	c, err := tr.For(".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range c.Rules {
+		if r.Error == bouncer.Off || r.Warn != bouncer.Off {
+			t.Errorf("rule %s: error %v, warn %v; want only rules that can fail, never warning", r.ID, r.Error, r.Warn)
+		}
+	}
+	if got := ids(c.Rules); slices.Contains(got, "weakened-tests") || !slices.Contains(got, "sus") {
+		t.Errorf("rules = %v, want warn-only weakened-tests dropped and sus kept", got)
+	}
+}
+
+func TestUnknownOverrides(t *testing.T) {
+	tr, _ := tree(t, nil)
+	tr.Overrides = Overrides{With: []string{"sus", "suss"}, No: []string{"emoji", "emojis"}}
+
+	if _, err := tr.For("."); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := tr.Unknown(), []string{"suss", "emojis"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("Unknown = %v, want %v", got, want)
 	}
 }

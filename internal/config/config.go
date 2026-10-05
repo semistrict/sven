@@ -17,10 +17,12 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"maps"
 	"os"
 	"path"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 
 	"go.yaml.in/yaml/v3"
@@ -70,8 +72,35 @@ type Rule struct {
 	OK        string    `yaml:"ok"`
 	Error     Threshold `yaml:"error"`
 	Warn      Threshold `yaml:"warn"`
-	// Disabled turns off an inherited rule with the same id.
-	Disabled bool `yaml:"disabled"`
+	// Disabled turns the rule off, or with false, back on.
+	Disabled *bool `yaml:"disabled"`
+}
+
+// adjust applies a rule without a question to the rule it inherits: the
+// thresholds and disabled it sets, and nothing else.
+func (base Rule) adjust(r Rule) Rule {
+	base.Error = cmp.Or(r.Error, base.Error)
+	base.Warn = cmp.Or(r.Warn, base.Warn)
+	if r.Disabled != nil {
+		base.Disabled = r.Disabled
+	}
+	return base
+}
+
+func (r Rule) disabled() bool { return r.Disabled != nil && *r.Disabled }
+
+// Overrides change what applies everywhere, on top of every config file:
+// what sven's command-line flags set.
+type Overrides struct {
+	// With turns rules on, including built-in ones that are off by default.
+	With []string
+	// No turns rules off.
+	No []string
+	// Only, if not empty, turns on these rules and turns off all others.
+	Only []string
+	// ErrorsOnly drops warnings: rules that can't fail a check aren't asked,
+	// and the rest never warn.
+	ErrorsOnly bool
 }
 
 // layer is one config file.
@@ -111,7 +140,12 @@ type Tree struct {
 	AllowRequestStorage bool
 	// Model is empty for the provider's default.
 	Model string
+	// Overrides apply on top of every config file. Set them before calling
+	// For.
+	Overrides Overrides
 
+	// known holds the id of every rule For has seen, on or off.
+	known   map[string]bool
 	root    string
 	top     []placed
 	layers  map[string]*layer
@@ -125,7 +159,7 @@ func Load(root, file string) (*Tree, error) {
 	if err != nil {
 		return nil, fmt.Errorf("built-in config: %w", err)
 	}
-	t := &Tree{root: root, layers: map[string]*layer{}, configs: map[string]Config{}}
+	t := &Tree{root: root, layers: map[string]*layer{}, configs: map[string]Config{}, known: map[string]bool{}}
 	t.top = []placed{{".", builtin}}
 	if file != "" {
 		l, err := read(file, false)
@@ -180,32 +214,79 @@ func (t *Tree) For(dir string) (Config, error) {
 			rules, index = nil, map[string]int{}
 		}
 		for _, r := range p.layer.Rules {
-			if i, ok := index[r.ID]; ok {
+			i, ok := index[r.ID]
+			switch {
+			case ok && r.Question == "":
+				rules[i] = rules[i].adjust(r)
+			case ok:
 				rules[i] = r
-				continue
+			case r.Question == "":
+				return Config{}, fmt.Errorf("%s: rule %s has no question, and there's no rule %s above it to adjust", path.Join(p.dir, FileName), r.ID, r.ID)
+			default:
+				index[r.ID] = len(rules)
+				rules = append(rules, r)
 			}
-			index[r.ID] = len(rules)
-			rules = append(rules, r)
+		}
+	}
+
+	o := t.Overrides
+	on, off := false, true
+	for _, id := range append(o.With, o.Only...) {
+		if i, ok := index[id]; ok {
+			rules[i].Disabled = &on
+		}
+	}
+	for _, id := range o.No {
+		if i, ok := index[id]; ok {
+			rules[i].Disabled = &off
 		}
 	}
 	for _, r := range rules {
-		if r.Disabled {
+		t.known[r.ID] = true
+		if r.disabled() || (len(o.Only) > 0 && !slices.Contains(o.Only, r.ID)) {
 			continue
 		}
-		c.Rules = append(c.Rules, bouncer.Rule{
+		rule := bouncer.Rule{
 			ID:        r.ID,
 			Question:  r.Question,
 			Violation: r.Violation,
 			OK:        r.OK,
 			Error:     float64(cmp.Or(r.Error, errorAt)),
 			Warn:      float64(cmp.Or(r.Warn, warnAt)),
-		})
+		}
+		if o.ErrorsOnly {
+			if rule.Error == bouncer.Off {
+				continue
+			}
+			rule.Warn = bouncer.Off
+		}
+		c.Rules = append(c.Rules, rule)
 	}
 	if len(c.Rules) > maxRules {
 		return Config{}, fmt.Errorf("%s: %d rules apply, want at most %d", dir, len(c.Rules), maxRules)
 	}
 	t.configs[dir] = c
 	return c, nil
+}
+
+// Unknown returns the ids among the overrides that name no rule For has
+// seen, to catch typos on the command line. Call it after For.
+func (t *Tree) Unknown() []string {
+	var out []string
+	o := t.Overrides
+	for _, id := range slices.Concat(o.With, o.No, o.Only) {
+		if !t.known[id] && !slices.Contains(out, id) {
+			out = append(out, id)
+		}
+	}
+	return out
+}
+
+// Known returns the ids of the rules For has seen, on or off, sorted.
+func (t *Tree) Known() []string {
+	ids := slices.Collect(maps.Keys(t.known))
+	slices.Sort(ids)
+	return ids
 }
 
 // layer returns the config file in dir, or nil if there is none.
@@ -275,9 +356,6 @@ func (l *layer) validate(nested bool) error {
 			return fmt.Errorf("rule id %q is used twice", r.ID)
 		}
 		seen[r.ID] = true
-		if r.Question == "" && !r.Disabled {
-			return fmt.Errorf("rule %s has no question", r.ID)
-		}
 	}
 	return nil
 }

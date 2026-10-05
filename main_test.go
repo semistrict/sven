@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -710,4 +711,48 @@ func TestInterruptPrintsWhatWasJudged(t *testing.T) {
 	if code != exitInterrupted || out.String() != want || errOut.String() != "" {
 		t.Errorf("sven = %d\nstdout:\n%s\nstderr:\n%s\nwant %d\nstdout:\n%s", code, out.String(), errOut.String(), exitInterrupted, want)
 	}
+}
+
+func TestNoFlagTurnsARuleOff(t *testing.T) {
+	repo(t)
+	typesafe(t)
+	stage(t, "main.go", dirty)
+
+	expect(t, []string{"check", "--cached", "--no", "debug-leftovers"}, exitPass, letIn+spent("jev-latest", 1), "")
+}
+
+func TestErrorsOnlyDropsWarnings(t *testing.T) {
+	repo(t)
+	typesafe(t)
+	stage(t, "main_test.go", skipped)
+
+	expect(t, []string{"check", "--cached", "--errors-only"}, exitPass, letIn+spent("jev-latest", 1), "")
+}
+
+func TestProviderFlagBeatsConfig(t *testing.T) {
+	repo(t)
+	typesafe(t)
+	t.Setenv("SVEN_PROVIDER", "")
+	stage(t, "main.go", dirty)
+
+	expect(t, []string{"check", "--cached", "--provider", "typesafe"}, exitRejected, rejected+spent("jev-latest", 1), "")
+}
+
+func TestUnknownRuleFlag(t *testing.T) {
+	repo(t)
+	typesafe(t)
+	stage(t, "main.go", dirty)
+	ids, err := config.BuiltinIDs()
+	if err != nil {
+		t.Fatal(err)
+	}
+	slices.Sort(ids)
+
+	expect(t, []string{"check", "--cached", "--no", "debug-leftover"}, exitError, "", "sven: no rule named debug-leftover; the rules are "+strings.Join(ids, ", ")+"\n")
+}
+
+func TestParallelMustBePositive(t *testing.T) {
+	repo(t)
+
+	expect(t, []string{"check", "--parallel", "0"}, exitError, "", "sven: --parallel 0: want at least 1\n")
 }

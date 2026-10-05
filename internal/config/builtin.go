@@ -26,3 +26,16 @@ func BuiltinQuestions() ([]byte, error) {
 	}
 	return append(out, '\n'), nil
 }
+
+// BuiltinIDs lists the built-in rules, including those off by default.
+func BuiltinIDs() ([]string, error) {
+	l, err := decode(Default)
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]string, len(l.Rules))
+	for i, r := range l.Rules {
+		ids[i] = r.ID
+	}
+	return ids, nil
+}

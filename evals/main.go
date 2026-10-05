@@ -6,6 +6,7 @@ package main
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"errors"
 	"flag"
@@ -63,7 +64,7 @@ func evaluate(ctx context.Context, configPath, casesDir, cacheDir string, catcha
 	if err != nil {
 		return err
 	}
-	labels, err := builtinIDs()
+	labels, err := config.BuiltinIDs()
 	if err != nil {
 		return err
 	}
@@ -71,7 +72,7 @@ func evaluate(ctx context.Context, configPath, casesDir, cacheDir string, catcha
 	if err != nil {
 		return err
 	}
-	client, err := provider.New(tree.Provider, tree.Model, tree.AllowRequestStorage)
+	client, err := provider.New(cmp.Or(os.Getenv("SVEN_PROVIDER"), tree.Provider), cmp.Or(os.Getenv("SVEN_MODEL"), tree.Model), tree.AllowRequestStorage)
 	if err != nil {
 		return err
 	}
@@ -92,25 +93,6 @@ func evaluate(ctx context.Context, configPath, casesDir, cacheDir string, catcha
 	fmt.Fprintf(w, "cost: %s\n\n", report.Usage.Summary(client.Name()))
 	write(w, judge(cases, labels, catchall, report), verbose)
 	return nil
-}
-
-// builtinIDs are the rules cases are labeled with. A config may evaluate
-// other rules, which are then only judged per case: a case should be flagged
-// if it breaks any labeled rule.
-func builtinIDs() ([]string, error) {
-	tree, err := config.Load(".", "")
-	if err != nil {
-		return nil, err
-	}
-	cfg, err := tree.For(".")
-	if err != nil {
-		return nil, err
-	}
-	ids := make([]string, len(cfg.Rules))
-	for i, r := range cfg.Rules {
-		ids[i] = r.ID
-	}
-	return ids, nil
 }
 
 // Case is one labeled diff: the rules it breaks, and that it keeps the rest.

@@ -37,8 +37,8 @@ const (
 
 	// chunkBytes keeps each request's diff well inside the models' 32k token
 	// state limit; smaller states are also judged more accurately.
-	chunkBytes  = 32 * 1024
-	concurrency = 8
+	chunkBytes      = 32 * 1024
+	defaultParallel = 8
 
 	// cacheDir holds remembered answers, relative to the work tree root.
 	cacheDir = ".sven/cache"
@@ -50,14 +50,24 @@ const (
 const usage = `sven vibe checks your commits at the door.
 
 Usage:
-  sven [check] [--config file] [-v] [--no-color] [git diff args]
-                                                  judge what git diff shows, e.g.
+  sven [check] [options] [git diff args]          judge what git diff shows, e.g.
                                                   --cached, main...HEAD, -- paths
-  sven check --all [-- path...]                   judge every tracked file
-  git diff | sven check --patch                   judge a diff from standard input
+  sven check --all [options] [-- path...]         judge every tracked file
+  git diff | sven check --patch [options]         judge a diff from standard input
   sven install-git-hook [-force]                  install as the git pre-commit hook
   sven init [--allow-request-storage]             write .sven.yaml, asking whether the
                                                   free sven API may store requests
+
+Check options, which override .sven.yaml:
+  --with rule,...                                 turn rules on, e.g. --with sus
+  --no rule,...                                   turn rules off
+  --only rule,...                                 ask only these rules
+  --errors-only                                   only hard failures; no warnings
+  --parallel n                                    requests at once (default 8)
+  --provider name, --model name                   who answers
+  --config file                                   root config file
+  -v                                              show every verdict
+  --no-color                                      never color output
 
 Environment:
   TYPESAFE_API_KEY                                for provider typesafe (Jev)
@@ -126,9 +136,20 @@ func check(ctx context.Context, args []string, stdin io.Reader, stdout, stderr i
 	configPath := fs.String("config", "", "root config file (default <work tree>/"+config.FileName+")")
 	verbose := fs.Bool("v", false, "show every verdict, not just violations")
 	fs.Bool("no-color", false, "never color output (also NO_COLOR=1)")
-	own, diffArgs := splitArgs(args)
+	parallel := fs.Int("parallel", defaultParallel, "how many requests to send to the model at once")
+	providerName := fs.String("provider", "", "sven, typesafe, or cloudflare, instead of .sven.yaml's")
+	model := fs.String("model", "", "the model to ask, instead of .sven.yaml's")
+	var o config.Overrides
+	fs.Var((*ruleList)(&o.With), "with", "turn rules on, such as ones off by default: --with sus")
+	fs.Var((*ruleList)(&o.No), "no", "turn rules off: --no sus,emoji")
+	fs.Var((*ruleList)(&o.Only), "only", "ask only these rules")
+	fs.BoolVar(&o.ErrorsOnly, "errors-only", false, "only hard failures: skip warn-only rules, never warn")
+	own, diffArgs := splitArgs(fs, args)
 	if err := fs.Parse(own); err != nil {
 		return false, err
+	}
+	if *parallel < 1 {
+		return false, fmt.Errorf("--parallel %d: want at least 1", *parallel)
 	}
 	if *patch && *all {
 		return false, errors.New("use either --patch or --all")
@@ -143,6 +164,12 @@ func check(ctx context.Context, args []string, stdin io.Reader, stdout, stderr i
 	}
 	tree, err := config.Load(root, cmp.Or(*configPath, filepath.Join(root, config.FileName)))
 	if err != nil {
+		return false, err
+	}
+	tree.Overrides = o
+	tree.Provider = cmp.Or(*providerName, os.Getenv("SVEN_PROVIDER"), tree.Provider)
+	tree.Model = cmp.Or(*model, os.Getenv("SVEN_MODEL"), tree.Model)
+	if _, err := tree.For("."); err != nil {
 		return false, err
 	}
 	var raw []byte
@@ -175,6 +202,9 @@ func check(ctx context.Context, args []string, stdin io.Reader, stdout, stderr i
 			targets = append(targets, bouncer.Target{File: f, Rules: c.Rules})
 		}
 	}
+	if unknown := tree.Unknown(); len(unknown) > 0 {
+		return false, fmt.Errorf("no rule named %s; the rules are %s", strings.Join(unknown, ", "), strings.Join(tree.Known(), ", "))
+	}
 	if len(targets) == 0 {
 		fmt.Fprintln(stdout, "sven: nothing to check: "+emptyBecause(*patch, *all, diffArgs, len(files)))
 		return false, nil
@@ -193,7 +223,7 @@ func check(ctx context.Context, args []string, stdin io.Reader, stdout, stderr i
 	}
 	// The cache answers first, so only real requests wait for a slot.
 	evaluator, err := cache.New(filepath.Join(root, cacheDir), client.Endpoint()+" "+client.Model(),
-		bouncer.Limit(client, concurrency, inFlight))
+		bouncer.Limit(client, *parallel, inFlight))
 	if err != nil {
 		prog.finish()
 		return false, err
@@ -254,23 +284,46 @@ func emptyBecause(patch, all bool, diffArgs []string, files int) string {
 	return "git diff " + strings.Join(diffArgs, " ") + " shows no changes."
 }
 
-// splitArgs separates sven's own flags from the arguments it passes on to
-// git diff.
-func splitArgs(args []string) (own, diffArgs []string) {
+// splitArgs separates sven's own flags, those defined in fs, from the
+// arguments it passes on to git diff.
+func splitArgs(fs *flag.FlagSet, args []string) (own, diffArgs []string) {
 	for i := 0; i < len(args); i++ {
-		switch a := args[i]; {
-		case a == "--":
+		a := args[i]
+		if a == "--" {
 			return own, append(diffArgs, args[i:]...)
-		case a == "-v" || a == "--patch" || a == "--all" || a == "--no-color" || a == "-h" || a == "--help" || strings.HasPrefix(a, "--config="):
-			own = append(own, a)
-		case a == "--config" && i+1 < len(args):
-			own = append(own, a, args[i+1])
-			i++
-		default:
+		}
+		name, _, hasValue := strings.Cut(strings.TrimLeft(a, "-"), "=")
+		f := fs.Lookup(name)
+		if !strings.HasPrefix(a, "-") || (f == nil && name != "h" && name != "help") {
 			diffArgs = append(diffArgs, a)
+			continue
+		}
+		own = append(own, a)
+		if f != nil && !isBool(f) && !hasValue && i+1 < len(args) {
+			i++
+			own = append(own, args[i])
 		}
 	}
 	return own, diffArgs
+}
+
+func isBool(f *flag.Flag) bool {
+	b, ok := f.Value.(interface{ IsBoolFlag() bool })
+	return ok && b.IsBoolFlag()
+}
+
+// ruleList collects rule ids from a repeatable, comma-separated flag.
+type ruleList []string
+
+func (l *ruleList) String() string { return strings.Join(*l, ",") }
+
+func (l *ruleList) Set(v string) error {
+	for id := range strings.SplitSeq(v, ",") {
+		if id = strings.TrimSpace(id); id != "" {
+			*l = append(*l, id)
+		}
+	}
+	return nil
 }
 
 // errInterrupted ends a check stopped by Ctrl-C, after its partial report.

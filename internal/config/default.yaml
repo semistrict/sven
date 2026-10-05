@@ -2,10 +2,12 @@
 #
 # These are the built-in settings. A .sven.yaml at the work tree root, and in
 # any directory below it, layers on top for the files in its directory and
-# beneath: rules merge by id, the closest definition replacing the whole rule
-# (`disabled: true` turns one off); the closest error and warn win; exclude
-# patterns add up, each relative to the directory of its .sven.yaml. Provider
-# and model can only be set at the root.
+# beneath: rules merge by id, the closest definition replacing the whole rule,
+# while an entry without a question only adjusts the rule above it, such as
+# `- {id: sus, disabled: false}` or `- {id: unfinished, error: 0.9}`; the
+# closest error and warn win; exclude patterns add up, each relative to the
+# directory of its .sven.yaml. Provider and model can only be set at the root.
+# sven check's --with, --no, --only and --errors-only apply on top of it all.
 #
 # Each rule is a yes/no question a System One model answers about every
 # changed file. If the probability of "yes" reaches the rule's error
@@ -169,9 +171,11 @@ rules:
     ok: The file is edited in place, or the name follows an existing versioning convention such as api/v2/.
 
   # A catch-all for everything the rules above don't name: warn on a hunch,
-  # reject only when sure.
+  # reject only when sure. Off by default: turn it on with `sven check
+  # --with sus`, or with `- {id: sus, disabled: false}` under rules.
 
   - id: sus
+    disabled: true
     error: 0.95
     warn: 0.7
     question: Would a careful senior engineer reviewing `diff` ask for changes before it is merged?
