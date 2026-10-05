@@ -26,9 +26,6 @@ func judge(state map[string]any, instructions string) float64 {
 	return 0.02
 }
 
-// turnedAway ends every run that exits non-zero, uncolored.
-const turnedAway = "sven: heute leider nicht.\n      (git commit --no-verify gets you in anyway)\n"
-
 // staged checks what is staged, as the pre-commit hook does.
 var staged = []string{"check", "--cached"}
 
@@ -252,7 +249,7 @@ func TestMissingAPIKey(t *testing.T) {
 	t.Setenv("TYPESAFE_API_KEY", "")
 	stage(t, "main.go", dirty)
 
-	expect(t, staged, exitError, "", "sven: TYPESAFE_API_KEY is not set\n"+turnedAway)
+	expect(t, staged, exitError, "", "sven: TYPESAFE_API_KEY is not set\n")
 }
 
 func TestAPIErrorFailsTheCheck(t *testing.T) {
@@ -261,7 +258,7 @@ func TestAPIErrorFailsTheCheck(t *testing.T) {
 	t.Setenv("TYPESAFE_API_KEY", "wrong")
 	stage(t, "main.go", dirty)
 
-	expect(t, staged, exitError, "", `sven: checking main.go: system one API: 401 Unauthorized: {"detail":"invalid API key"}`+"\n"+turnedAway)
+	expect(t, staged, exitError, "", `sven: checking main.go: system one API: 401 Unauthorized: {"detail":"invalid API key"}`+"\n")
 
 	if got := srv.Paths(); len(got) != 1 {
 		t.Errorf("requests = %q, want 1", got)
@@ -274,7 +271,7 @@ func TestInvalidConfig(t *testing.T) {
 	write(t, config.FileName, "provider: openai\n")
 	stage(t, "main.go", dirty)
 
-	expect(t, staged, exitError, "", "sven: "+filepath.Join(dir, config.FileName)+": provider \"openai\": want sven, typesafe, or cloudflare\n"+turnedAway)
+	expect(t, staged, exitError, "", "sven: "+filepath.Join(dir, config.FileName)+": provider \"openai\": want sven, typesafe, or cloudflare\n")
 }
 
 // freeAPI points the sven provider at a fake server that needs no key.
@@ -328,7 +325,7 @@ func TestInitAllowFlagSkipsTheQuestion(t *testing.T) {
 	path := filepath.Join(dir, config.FileName)
 
 	expect(t, []string{"init", "--allow-request-storage"}, exitPass, "sven: wrote "+path+": the free sven API will check this project's changes\n", "")
-	expect(t, []string{"init"}, exitError, "", "sven: "+path+" already exists\n"+turnedAway)
+	expect(t, []string{"init"}, exitError, "", "sven: "+path+" already exists\n")
 }
 
 func TestFreeAPINeedsConsent(t *testing.T) {
@@ -336,7 +333,7 @@ func TestFreeAPINeedsConsent(t *testing.T) {
 	srv := freeAPI(t)
 	stage(t, "main.go", dirty)
 
-	expect(t, staged, exitError, "", "sven: the free sven API stores the requests and responses it handles: run `sven init` to agree, or use your own key with provider: typesafe and TYPESAFE_API_KEY\n"+turnedAway)
+	expect(t, staged, exitError, "", "sven: the free sven API stores the requests and responses it handles: run `sven init` to agree, or use your own key with provider: typesafe and TYPESAFE_API_KEY\n")
 
 	if got := srv.Paths(); len(got) != 0 {
 		t.Errorf("requests = %q, want none", got)
@@ -363,7 +360,7 @@ func TestInstallGitHookKeepsForeignHook(t *testing.T) {
 	hook := filepath.Join(dir, ".git", "hooks", "pre-commit")
 	write(t, hook, "#!/bin/sh\nmake lint\n")
 
-	expect(t, []string{"install-git-hook"}, exitError, "", "sven: "+hook+" already exists: add `sven check --cached` to it, or replace it with -force\n"+turnedAway)
+	expect(t, []string{"install-git-hook"}, exitError, "", "sven: "+hook+" already exists: add `sven check --cached` to it, or replace it with -force\n")
 	expect(t, []string{"install-git-hook", "-force"}, exitPass, "sven: installed "+hook+"\n", "")
 	if got, err := os.ReadFile(hook); err != nil || string(got) != hookScript {
 		t.Errorf("hook = %q, %v", got, err)
@@ -609,7 +606,7 @@ func TestPatchFromStandardInput(t *testing.T) {
 func TestPatchTakesNoGitDiffArguments(t *testing.T) {
 	repo(t)
 
-	expect(t, []string{"check", "--patch", "--cached"}, exitError, "", "sven: --patch reads the diff from standard input; leave out git diff arguments\n"+turnedAway)
+	expect(t, []string{"check", "--patch", "--cached"}, exitError, "", "sven: --patch reads the diff from standard input; leave out git diff arguments\n")
 }
 
 func TestGitDiffArgumentsPassThrough(t *testing.T) {
@@ -687,5 +684,5 @@ func TestAllChecksEveryTrackedFile(t *testing.T) {
 func TestAllAndPatchConflict(t *testing.T) {
 	repo(t)
 
-	expect(t, []string{"check", "--all", "--patch"}, exitError, "", "sven: use either --patch or --all\n"+turnedAway)
+	expect(t, []string{"check", "--all", "--patch"}, exitError, "", "sven: use either --patch or --all\n")
 }

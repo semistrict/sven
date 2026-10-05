@@ -69,6 +69,10 @@ type Bouncer struct {
 	ChunkBytes int
 	// Concurrency caps requests in flight.
 	Concurrency int
+	// Judged, if set, is called with each file's verdicts as soon as all of
+	// its chunks are judged, and with the usage of the check so far. Calls
+	// never overlap.
+	Judged func(path string, verdicts []Verdict, usage systemone.Usage)
 }
 
 // Verdict is how likely one file violates one rule.
@@ -118,20 +122,21 @@ func (r Report) Rejected() bool {
 	return false
 }
 
-// job is one request: a chunk of one target's file, and the probability it
-// violates each of the target's rules.
+// job is one request: a chunk of one target's file.
 type job struct {
 	target    int
 	state     map[string]string
 	questions map[string]systemone.Question
-	p         []float64
 }
 
 // Check judges every target's file against its rules. Targets without rules
 // are let through unasked.
 func (b Bouncer) Check(ctx context.Context, targets []Target) (Report, error) {
 	var jobs []job
+	remaining := make([]int, len(targets))
+	worst := make([][]float64, len(targets))
 	for i, t := range targets {
+		worst[i] = make([]float64, len(t.Rules))
 		if len(t.Rules) == 0 {
 			continue
 		}
@@ -144,8 +149,8 @@ func (b Bouncer) Check(ctx context.Context, targets []Target) (Report, error) {
 				target:    i,
 				state:     map[string]string{"path": t.File.Path, "diff": chunk},
 				questions: questions,
-				p:         make([]float64, len(t.Rules)),
 			})
+			remaining[i]++
 		}
 	}
 
@@ -153,10 +158,10 @@ func (b Bouncer) Check(ctx context.Context, targets []Target) (Report, error) {
 	defer cancel(nil)
 	sem := make(chan struct{}, b.Concurrency)
 	var wg sync.WaitGroup
+	// mu guards worst, remaining, usage, and calls to Judged.
 	var mu sync.Mutex
 	var usage systemone.Usage
-	for i := range jobs {
-		j := &jobs[i]
+	for _, j := range jobs {
 		wg.Go(func() {
 			select {
 			case sem <- struct{}{}:
@@ -170,12 +175,16 @@ func (b Bouncer) Check(ctx context.Context, targets []Target) (Report, error) {
 				cancel(fmt.Errorf("checking %s: %w", t.File.Path, err))
 				return
 			}
-			for r, rule := range t.Rules {
-				j.p[r] = resp.Answers[rule.ID].Noul
-			}
 			mu.Lock()
+			defer mu.Unlock()
 			usage = usage.Add(resp.Usage)
-			mu.Unlock()
+			for r, rule := range t.Rules {
+				worst[j.target][r] = max(worst[j.target][r], resp.Answers[rule.ID].Noul)
+			}
+			remaining[j.target]--
+			if remaining[j.target] == 0 && b.Judged != nil {
+				b.Judged(t.File.Path, verdicts(t, worst[j.target]), usage)
+			}
 		})
 	}
 	wg.Wait()
@@ -183,20 +192,18 @@ func (b Bouncer) Check(ctx context.Context, targets []Target) (Report, error) {
 		return Report{}, err
 	}
 
-	worst := make([][]float64, len(targets))
-	for i, t := range targets {
-		worst[i] = make([]float64, len(t.Rules))
-	}
-	for _, j := range jobs {
-		for r, p := range j.p {
-			worst[j.target][r] = max(worst[j.target][r], p)
-		}
-	}
 	report := Report{Usage: usage}
 	for i, t := range targets {
-		for r, rule := range t.Rules {
-			report.Verdicts = append(report.Verdicts, Verdict{Path: t.File.Path, Rule: rule, P: worst[i][r]})
-		}
+		report.Verdicts = append(report.Verdicts, verdicts(t, worst[i])...)
 	}
 	return report, nil
+}
+
+// verdicts pairs a target's rules with the highest probability seen for each.
+func verdicts(t Target, worst []float64) []Verdict {
+	out := make([]Verdict, len(t.Rules))
+	for r, rule := range t.Rules {
+		out[r] = Verdict{Path: t.File.Path, Rule: rule, P: worst[r]}
+	}
+	return out
 }

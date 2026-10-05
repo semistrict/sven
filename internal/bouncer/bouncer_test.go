@@ -234,3 +234,33 @@ func (u usageOf) Evaluate(ctx context.Context, state any, questions map[string]s
 	resp.Usage = u.usage
 	return resp, nil
 }
+
+func TestJudgedOncePerFileAfterAllItsChunks(t *testing.T) {
+	j := &judge{p: contains("println", 0.99)}
+	var judged []Verdict
+	calls := map[string]int{}
+	b := Bouncer{Evaluator: j, ChunkBytes: 30, Concurrency: 4, Judged: func(path string, vs []Verdict, _ systemone.Usage) {
+		calls[path]++
+		judged = append(judged, vs...)
+	}}
+	big := Target{File: diff.File{Path: "big.go", Hunks: []diff.Hunk{
+		{Header: "@@ -1 +1 @@", Lines: []string{"+fine()", "+fine()"}},
+		{Header: "@@ -9 +9 @@", Lines: []string{"+println(x)"}},
+	}}, Rules: []Rule{debug}}
+
+	report, err := b.Check(t.Context(), []Target{big, target("small.go", []Rule{debug}, "+fine()")})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if want := map[string]int{"big.go": 1, "small.go": 1}; !reflect.DeepEqual(calls, want) {
+		t.Errorf("calls = %v, want %v", calls, want)
+	}
+	slices.SortFunc(judged, func(a, b Verdict) int { return strings.Compare(a.Path, b.Path) })
+	if !reflect.DeepEqual(judged, report.Verdicts) {
+		t.Errorf("judged = %+v, want the report's %+v", judged, report.Verdicts)
+	}
+	if judged[0].P != 0.99 {
+		t.Errorf("big.go P = %v, want the worst chunk's 0.99", judged[0].P)
+	}
+}

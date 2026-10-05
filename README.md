@@ -117,9 +117,11 @@ sven check --all [-- src/]         # every tracked file
 git diff | sven check --patch
 ```
 
-Output is colored on a terminal. `--no-color` or `NO_COLOR=1` turns it off;
-`CLICOLOR_FORCE=1` turns it on when piped.
+On a terminal, a status line shows progress while sven works: files done,
+what's been flagged, time left, and cost so far. Output is colored there too;
+`--no-color` or `NO_COLOR=1` turns color off, `CLICOLOR_FORCE=1` turns it on
+when piped.
 
 Exit codes: `0` rin mit dir; `1` heute leider nicht; `2` sven itself fell
-over, and it's still heute leider nicht.
+over and says why.
 

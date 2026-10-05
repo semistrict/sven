@@ -25,6 +25,7 @@ import (
 	"github.com/semistrict/sven/internal/diff"
 	"github.com/semistrict/sven/internal/git"
 	"github.com/semistrict/sven/internal/provider"
+	"github.com/semistrict/sven/systemone"
 )
 
 const (
@@ -96,9 +97,7 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 		return exitPass
 	}
 	if err != nil {
-		p := colors(stderr, args)
-		fmt.Fprintln(stderr, p.red(fmt.Sprintf("sven: %v", err)))
-		printTurnedAway(stderr, p)
+		fmt.Fprintln(stderr, colors(stderr, args).red(fmt.Sprintf("sven: %v", err)))
 		return exitError
 	}
 	return exitPass
@@ -180,13 +179,31 @@ func check(ctx context.Context, args []string, stdin io.Reader, stdout, stderr i
 		return false, err
 	}
 	b := bouncer.Bouncer{Evaluator: evaluator, ChunkBytes: chunkBytes, Concurrency: concurrency}
+	prog := startProgress(stderr, colors(stderr, args), len(targets), func(u systemone.Usage) string {
+		return price(client, u)
+	})
+	if prog != nil {
+		b.Judged = prog.judged
+	}
 	report, err := b.Check(ctx, targets)
+	prog.finish()
 	if err != nil {
 		return false, err
 	}
 	printReport(stdout, report, *verbose, p)
 	fmt.Fprintln(stdout, p.dim("sven: "+report.Usage.Summary(client.Name())))
 	return report.Rejected(), nil
+}
+
+// price is what usage costs on client, for the status line.
+func price(client *systemone.Client, u systemone.Usage) string {
+	if client.Name() == systemone.SvenName {
+		return "free"
+	}
+	if cost, ok := systemone.Cost(client.Model(), u); ok {
+		return fmt.Sprintf("$%.4f", cost)
+	}
+	return fmt.Sprintf("%d tokens", u.InputTokens)
 }
 
 // emptyBecause explains why a check found nothing to judge.
@@ -262,7 +279,7 @@ func printReport(w io.Writer, report bouncer.Report, verbose bool, p palette) {
 	}
 }
 
-// printTurnedAway ends every run that exits non-zero.
+// printTurnedAway ends a check that found error-level violations.
 func printTurnedAway(w io.Writer, p palette) {
 	fmt.Fprintln(w, p.bold(p.red("sven: heute leider nicht.")))
 	fmt.Fprintln(w, p.dim("      (git commit --no-verify gets you in anyway)"))
