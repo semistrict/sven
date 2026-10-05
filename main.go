@@ -50,6 +50,7 @@ Usage:
   sven [check] [--config file] [-v] [--no-color] [git diff args]
                                                   judge what git diff shows, e.g.
                                                   --cached, main...HEAD, -- paths
+  sven check --all [-- path...]                   judge every tracked file
   git diff | sven check --patch                   judge a diff from standard input
   sven install-git-hook [-force]                  install as the git pre-commit hook
   sven init [--allow-request-storage]             write .sven.yaml, asking whether the
@@ -112,12 +113,16 @@ func flags(name string, stderr io.Writer) *flag.FlagSet {
 func check(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer, p palette) (rejected bool, err error) {
 	fs := flags("check", stderr)
 	patch := fs.Bool("patch", false, "judge a unified diff read from standard input")
+	all := fs.Bool("all", false, "judge every tracked file, as if newly added")
 	configPath := fs.String("config", "", "root config file (default <work tree>/"+config.FileName+")")
 	verbose := fs.Bool("v", false, "show every verdict, not just violations")
 	fs.Bool("no-color", false, "never color output (also NO_COLOR=1)")
 	own, diffArgs := splitArgs(args)
 	if err := fs.Parse(own); err != nil {
 		return false, err
+	}
+	if *patch && *all {
+		return false, errors.New("use either --patch or --all")
 	}
 	if *patch && len(diffArgs) > 0 {
 		return false, errors.New("--patch reads the diff from standard input; leave out git diff arguments")
@@ -135,6 +140,13 @@ func check(ctx context.Context, args []string, stdin io.Reader, stdout, stderr i
 	if *patch {
 		raw, err = io.ReadAll(stdin)
 	} else {
+		if *all {
+			var empty string
+			if empty, err = git.EmptyTree(ctx); err != nil {
+				return false, err
+			}
+			diffArgs = append([]string{empty}, diffArgs...)
+		}
 		raw, err = git.Diff(ctx, diffArgs...)
 	}
 	if err != nil {
@@ -155,7 +167,7 @@ func check(ctx context.Context, args []string, stdin io.Reader, stdout, stderr i
 		}
 	}
 	if len(targets) == 0 {
-		fmt.Fprintln(stdout, "sven: nothing to check: "+emptyBecause(*patch, diffArgs, len(files)))
+		fmt.Fprintln(stdout, "sven: nothing to check: "+emptyBecause(*patch, *all, diffArgs, len(files)))
 		return false, nil
 	}
 
@@ -178,7 +190,7 @@ func check(ctx context.Context, args []string, stdin io.Reader, stdout, stderr i
 }
 
 // emptyBecause explains why a check found nothing to judge.
-func emptyBecause(patch bool, diffArgs []string, files int) string {
+func emptyBecause(patch, all bool, diffArgs []string, files int) string {
 	opts := diffArgs
 	if i := slices.Index(diffArgs, "--"); i >= 0 {
 		opts = diffArgs[:i]
@@ -188,6 +200,8 @@ func emptyBecause(patch bool, diffArgs []string, files int) string {
 		return "every changed file is excluded or has no rules."
 	case patch:
 		return "the patch changes no files."
+	case all:
+		return "no tracked files."
 	case slices.Contains(opts, "--cached") || slices.Contains(opts, "--staged"):
 		return "no staged changes."
 	case len(opts) == 0:
@@ -203,7 +217,7 @@ func splitArgs(args []string) (own, diffArgs []string) {
 		switch a := args[i]; {
 		case a == "--":
 			return own, append(diffArgs, args[i:]...)
-		case a == "-v" || a == "--patch" || a == "--no-color" || a == "-h" || a == "--help" || strings.HasPrefix(a, "--config="):
+		case a == "-v" || a == "--patch" || a == "--all" || a == "--no-color" || a == "-h" || a == "--help" || strings.HasPrefix(a, "--config="):
 			own = append(own, a)
 		case a == "--config" && i+1 < len(args):
 			own = append(own, a, args[i+1])

@@ -24,6 +24,13 @@ func HooksDir(ctx context.Context) (string, error) {
 	return filepath.Clean(strings.TrimSpace(string(out))), err
 }
 
+// EmptyTree returns the id of the empty tree in the repository's hash
+// format. Diffing against it shows every tracked file as added.
+func EmptyTree(ctx context.Context) (string, error) {
+	out, err := run(ctx, "hash-object", "-t", "tree", "/dev/null")
+	return strings.TrimSpace(string(out)), err
+}
+
 // Diff returns what git diff prints for args, such as "--cached", a revision
 // range, or paths. Whatever the user's git config, paths are relative to the
 // work tree root, with a/ and b/ prefixes.

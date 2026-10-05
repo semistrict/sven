@@ -668,3 +668,24 @@ func TestNothingToCheckSaysWhy(t *testing.T) {
 	expect(t, []string{"check"}, exitPass, "sven: nothing to check: no unstaged changes. For staged ones, use sven check --cached; new files need git add first.\n", "")
 	expect(t, []string{"check", "HEAD", "--", "main.go"}, exitPass, "sven: nothing to check: git diff HEAD -- main.go shows no changes.\n", "")
 }
+
+func TestAllChecksEveryTrackedFile(t *testing.T) {
+	repo(t)
+	srv := typesafe(t)
+	stage(t, "lib/tool.go", dirty)
+	gitRun(t, "commit", "-q", "-m", "tool")
+
+	expect(t, []string{"check"}, exitPass, "sven: nothing to check: no unstaged changes. For staged ones, use sven check --cached; new files need git add first.\n", "")
+	expect(t, []string{"check", "--all"}, exitRejected, strings.Replace(rejected, "  main.go", "  lib/tool.go", 1)+spent("jev-latest", 2), "")
+	expect(t, []string{"check", "--all", "--", "main.go"}, exitPass, letIn+cached, "")
+
+	if got := srv.Paths(); len(got) != 2 {
+		t.Errorf("requests = %q, want one per tracked file", got)
+	}
+}
+
+func TestAllAndPatchConflict(t *testing.T) {
+	repo(t)
+
+	expect(t, []string{"check", "--all", "--patch"}, exitError, "", "sven: use either --patch or --all\n"+turnedAway)
+}
