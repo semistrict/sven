@@ -1,7 +1,5 @@
 # sven
 
-> heute leider nicht.
-
 sven is a bouncer for your commits. It looks at each staged file once, makes a
 gut call, and lets you in or doesn't.
 
@@ -24,15 +22,11 @@ sven: 4272 input tokens on jev-latest, $0.000179
 Coding agents leave the same mess every time: `fmt.Println("got here")`,
 `except: pass`, `if s == "Hello, World!"`, `t.Skip("flaky")`, `as any`,
 `IMPLEMENTATION_SUMMARY.md`. Linters can't see most of it. An LLM reviewer can,
-but it takes seconds and real money per commit, so nobody runs one on every
-commit.
+but it takes seconds and real money per commit.
 
 sven asks a System One model instead: TypeSafe's
 [Jev](https://docs.typesafe.ai) or Cloudflare's
-[Clef](https://developers.cloudflare.com/workers-ai/models/clef-flash/). These
-don't generate text. They take a diff and a list of yes/no questions and return
-a calibrated probability for each, in one forward pass. A file costs about
-$0.0001, so sven runs on a free API by default.
+[Clef](https://developers.cloudflare.com/workers-ai/models/clef-flash/). 
 
 ## Install
 
@@ -42,10 +36,10 @@ sven init
 sven install-git-hook
 ```
 
-No key needed. The free API answers sven's built-in rules with Jev, up to 120
-requests a minute. **It stores the requests and responses it handles**,
-encrypted, to improve sven, so `sven init` asks first. Say no, or want custom
-rules? Bring your own key:
+There is a free API answers sven's built-in rules.  **It stores the requests and responses it handles**,
+encrypted, to improve sven, so `sven init` asks first. 
+
+Don't want to share your data with us? Bring your own key, then nothing is sent to our servers at all:
 
 ```yaml
 # .sven.yaml
@@ -125,6 +119,3 @@ git diff | sven check --patch
 Exit codes: `0` rin mit dir; `1` heute leider nicht; `2` sven itself fell
 over, and it's still heute leider nicht.
 
-## License
-
-MIT
