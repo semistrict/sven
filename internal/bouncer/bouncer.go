@@ -67,15 +67,10 @@ type Bouncer struct {
 	Evaluator Evaluator
 	// ChunkBytes caps how much diff text goes into one request.
 	ChunkBytes int
-	// Concurrency caps requests in flight.
-	Concurrency int
 	// Judged, if set, is called with each file's verdicts as soon as all of
 	// its chunks are judged, and with the usage of the check so far. Calls
 	// never overlap.
 	Judged func(path string, verdicts []Verdict, usage systemone.Usage)
-	// Requests, if set, is called with +1 as each request to the model starts
-	// and -1 as it ends, from many goroutines at once.
-	Requests func(delta int)
 }
 
 // Verdict is how likely one file violates one rule.
@@ -162,27 +157,16 @@ func (b Bouncer) Check(ctx context.Context, targets []Target) (Report, error) {
 
 	ctx, cancel := context.WithCancelCause(ctx)
 	defer cancel(nil)
-	sem := make(chan struct{}, b.Concurrency)
 	var wg sync.WaitGroup
 	// mu guards worst, remaining, usage, and calls to Judged.
 	var mu sync.Mutex
 	var usage systemone.Usage
 	for _, j := range jobs {
+		// Every chunk is asked at once; Limit caps the requests that reach
+		// the model, so cached chunks don't queue behind them.
 		wg.Go(func() {
-			select {
-			case sem <- struct{}{}:
-			case <-ctx.Done():
-				return
-			}
-			defer func() { <-sem }()
 			t := targets[j.target]
-			if b.Requests != nil {
-				b.Requests(+1)
-			}
 			resp, err := b.Evaluator.Evaluate(ctx, j.state, j.questions)
-			if b.Requests != nil {
-				b.Requests(-1)
-			}
 			if err != nil {
 				cancel(fmt.Errorf("checking %s: %w", t.File.Path, err))
 				return

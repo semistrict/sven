@@ -75,7 +75,7 @@ func evaluate(ctx context.Context, configPath, casesDir, cacheDir string, catcha
 	if err != nil {
 		return err
 	}
-	evaluator, err := cache.New(cacheDir, client.Endpoint()+" "+client.Model(), client)
+	evaluator, err := cache.New(cacheDir, client.Endpoint()+" "+client.Model(), bouncer.Limit(client, 8, nil))
 	if err != nil {
 		return err
 	}
@@ -83,7 +83,7 @@ func evaluate(ctx context.Context, configPath, casesDir, cacheDir string, catcha
 	for i, c := range cases {
 		targets[i] = bouncer.Target{File: c.file, Rules: cfg.Rules}
 	}
-	b := bouncer.Bouncer{Evaluator: evaluator, ChunkBytes: 1 << 20, Concurrency: 8}
+	b := bouncer.Bouncer{Evaluator: evaluator, ChunkBytes: 1 << 20}
 	report, err := b.Check(ctx, targets)
 	if err != nil {
 		return err

@@ -74,7 +74,7 @@ func TestCheck(t *testing.T) {
 		}
 		return 0.05
 	}}
-	b := Bouncer{Evaluator: j, ChunkBytes: 1000, Concurrency: 2}
+	b := Bouncer{Evaluator: j, ChunkBytes: 1000}
 
 	report, err := b.Check(t.Context(), []Target{
 		target("a.go", rules, "+println(x)", "+// TODO"),
@@ -109,7 +109,7 @@ func TestCheck(t *testing.T) {
 
 func TestCheckAsksEachFileItsOwnRules(t *testing.T) {
 	j := &judge{p: contains("x", 0)}
-	b := Bouncer{Evaluator: j, ChunkBytes: 1000, Concurrency: 1}
+	b := Bouncer{Evaluator: j, ChunkBytes: 1000}
 
 	report, err := b.Check(t.Context(), []Target{
 		target("dir/a.go", []Rule{debug}, "+x"),
@@ -135,7 +135,7 @@ func TestCheckAsksEachFileItsOwnRules(t *testing.T) {
 
 func TestCheckTakesWorstChunk(t *testing.T) {
 	j := &judge{p: contains("println", 0.99)}
-	b := Bouncer{Evaluator: j, ChunkBytes: 30, Concurrency: 4}
+	b := Bouncer{Evaluator: j, ChunkBytes: 30}
 	big := Target{File: diff.File{Path: "big.go", Hunks: []diff.Hunk{
 		{Header: "@@ -1 +1 @@", Lines: []string{"+fine()", "+fine()"}},
 		{Header: "@@ -9 +9 @@", Lines: []string{"+println(x)"}},
@@ -157,7 +157,7 @@ func TestCheckTakesWorstChunk(t *testing.T) {
 
 func TestCheckError(t *testing.T) {
 	j := &judge{err: errors.New("boom")}
-	b := Bouncer{Evaluator: j, ChunkBytes: 1000, Concurrency: 1}
+	b := Bouncer{Evaluator: j, ChunkBytes: 1000}
 
 	_, err := b.Check(t.Context(), []Target{target("a.go", rules, "+x")})
 
@@ -191,7 +191,7 @@ func TestLevels(t *testing.T) {
 func TestWarningsDoNotReject(t *testing.T) {
 	warnDebug := Rule{ID: "debug", Question: "Does `diff` add debug prints?", Error: Off, Warn: 0.5}
 	j := &judge{p: contains("println", 0.95)}
-	b := Bouncer{Evaluator: j, ChunkBytes: 1000, Concurrency: 1}
+	b := Bouncer{Evaluator: j, ChunkBytes: 1000}
 
 	report, err := b.Check(t.Context(), []Target{target("a.go", []Rule{warnDebug}, "+println(x)")})
 	if err != nil {
@@ -209,7 +209,7 @@ func TestWarningsDoNotReject(t *testing.T) {
 
 func TestUsageAddsUp(t *testing.T) {
 	j := &judge{p: contains("x", 0)}
-	b := Bouncer{Evaluator: usageOf{j, systemone.Usage{InputTokens: 300, OutputTokens: 2}}, ChunkBytes: 1000, Concurrency: 4}
+	b := Bouncer{Evaluator: usageOf{j, systemone.Usage{InputTokens: 300, OutputTokens: 2}}, ChunkBytes: 1000}
 
 	report, err := b.Check(t.Context(), []Target{target("a.go", rules, "+x"), target("b.go", rules, "+y")})
 	if err != nil {
@@ -239,7 +239,7 @@ func TestJudgedOncePerFileAfterAllItsChunks(t *testing.T) {
 	j := &judge{p: contains("println", 0.99)}
 	var judged []Verdict
 	calls := map[string]int{}
-	b := Bouncer{Evaluator: j, ChunkBytes: 30, Concurrency: 4, Judged: func(path string, vs []Verdict, _ systemone.Usage) {
+	b := Bouncer{Evaluator: j, ChunkBytes: 30, Judged: func(path string, vs []Verdict, _ systemone.Usage) {
 		calls[path]++
 		judged = append(judged, vs...)
 	}}
@@ -286,7 +286,7 @@ func (i interrupter) Evaluate(ctx context.Context, state any, questions map[stri
 
 func TestInterruptedCheckKeepsJudgedFiles(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
-	b := Bouncer{Evaluator: interrupter{cancel, make(chan struct{})}, ChunkBytes: 1000, Concurrency: 2}
+	b := Bouncer{Evaluator: interrupter{cancel, make(chan struct{})}, ChunkBytes: 1000}
 
 	report, err := b.Check(ctx, []Target{target("a.go", []Rule{debug}, "+x"), target("b.go", []Rule{debug}, "+y")})
 
@@ -299,10 +299,10 @@ func TestInterruptedCheckKeepsJudgedFiles(t *testing.T) {
 	}
 }
 
-func TestRequestsCountsWhatIsInFlight(t *testing.T) {
+func TestLimitCapsRequestsInFlight(t *testing.T) {
 	var mu sync.Mutex
 	inFlight, most, starts := 0, 0, 0
-	b := Bouncer{Evaluator: &judge{p: contains("x", 0)}, ChunkBytes: 1000, Concurrency: 2, Requests: func(delta int) {
+	limited := Limit(&judge{p: contains("x", 0)}, 2, func(delta int) {
 		mu.Lock()
 		defer mu.Unlock()
 		inFlight += delta
@@ -310,7 +310,8 @@ func TestRequestsCountsWhatIsInFlight(t *testing.T) {
 		if delta > 0 {
 			starts++
 		}
-	}}
+	})
+	b := Bouncer{Evaluator: limited, ChunkBytes: 1000}
 	var targets []Target
 	for _, name := range []string{"a.go", "b.go", "c.go", "d.go", "e.go"} {
 		targets = append(targets, target(name, rules, "+x"))
@@ -321,6 +322,32 @@ func TestRequestsCountsWhatIsInFlight(t *testing.T) {
 	}
 
 	if inFlight != 0 || starts != 5 || most < 1 || most > 2 {
-		t.Errorf("in flight at end = %d, starts = %d, most at once = %d; want 0, 5, and at most the concurrency of 2", inFlight, starts, most)
+		t.Errorf("in flight at end = %d, starts = %d, most at once = %d; want 0, 5, and at most the limit of 2", inFlight, starts, most)
 	}
+}
+
+func TestLimitGivesUpWaitingWhenCanceled(t *testing.T) {
+	b := blocker{holding: make(chan struct{}), release: make(chan struct{})}
+	defer close(b.release)
+	limited := Limit(b, 1, nil)
+	go limited.Evaluate(t.Context(), "first", nil)
+	<-b.holding
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	_, err := limited.Evaluate(ctx, "second", nil)
+
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("err = %v, want context.Canceled", err)
+	}
+}
+
+// blocker says when a request holds its slot, and holds it until release
+// closes.
+type blocker struct{ holding, release chan struct{} }
+
+func (b blocker) Evaluate(context.Context, any, map[string]systemone.Question) (*systemone.Response, error) {
+	b.holding <- struct{}{}
+	<-b.release
+	return &systemone.Response{}, nil
 }

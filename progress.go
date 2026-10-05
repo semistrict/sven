@@ -174,7 +174,7 @@ func startProgress(out io.Writer, p palette, total int, price func(systemone.Usa
 	return g
 }
 
-// requests counts requests under way; it fits bouncer.Bouncer.Requests.
+// requests counts requests under way; it fits bouncer.Limit.
 func (g *progress) requests(delta int) {
 	g.mu.Lock()
 	defer g.mu.Unlock()

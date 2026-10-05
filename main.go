@@ -184,17 +184,23 @@ func check(ctx context.Context, args []string, stdin io.Reader, stdout, stderr i
 	if err != nil {
 		return false, err
 	}
-	evaluator, err := cache.New(filepath.Join(root, cacheDir), client.Endpoint()+" "+client.Model(), client)
-	if err != nil {
-		return false, err
-	}
-	b := bouncer.Bouncer{Evaluator: evaluator, ChunkBytes: chunkBytes, Concurrency: concurrency}
 	prog := startProgress(stderr, colors(stderr, args), len(targets), func(u systemone.Usage) string {
 		return price(client, u)
 	})
+	var inFlight func(int)
+	if prog != nil {
+		inFlight = prog.requests
+	}
+	// The cache answers first, so only real requests wait for a slot.
+	evaluator, err := cache.New(filepath.Join(root, cacheDir), client.Endpoint()+" "+client.Model(),
+		bouncer.Limit(client, concurrency, inFlight))
+	if err != nil {
+		prog.finish()
+		return false, err
+	}
+	b := bouncer.Bouncer{Evaluator: evaluator, ChunkBytes: chunkBytes}
 	if prog != nil {
 		b.Judged = prog.judged
-		b.Requests = prog.requests
 	}
 	report, err := b.Check(ctx, targets)
 	prog.finish()
