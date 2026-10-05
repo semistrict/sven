@@ -10,8 +10,8 @@ $ git commit -m "fix login"
   auth/login_test.go +11 -0
     ! weakened-tests          96%  Tests are skipped, disabled, removed, or made weaker.
 
-sven: heute leider nicht.
-      (git commit --no-verify gets you in anyway)
+✗ sven: heute leider nicht.
+        (git commit --no-verify gets you in anyway)
 sven: 4208 input tokens on jev-latest, $0.000177
 ```
 
@@ -146,6 +146,6 @@ what's been flagged, time left, and cost so far. Output is colored there too;
 `--no-color` or `NO_COLOR=1` turns color off, `CLICOLOR_FORCE=1` turns it on
 when piped.
 
-Exit codes: `0` rin mit dir; `1` heute leider nicht; `2` sven itself fell
+Exit codes: `0` let in; `1` heute leider nicht; `2` sven itself fell
 over and says why.
 

@@ -50,10 +50,10 @@ const (
 	rejected = `  main.go +1 -0
     ✗ debug-leftovers         93%  Added lines contain temporary debugging code that was not meant to be committed.
 
-sven: heute leider nicht.
-      (git commit --no-verify gets you in anyway)
+✗ sven: heute leider nicht.
+        (git commit --no-verify gets you in anyway)
 `
-	letIn = "sven: Na logen. Rin mit dir.\n"
+	letIn = "✓ sven: na logen. rin mit dir.\n"
 
 	cached = "sven: every answer came from the cache, $0\n"
 )
@@ -186,8 +186,8 @@ rules:
     ✓ debug-leftovers          2%
     ✓ no-yelling               2%
 
-sven: heute leider nicht.
-      (git commit --no-verify gets you in anyway)
+✗ sven: heute leider nicht.
+        (git commit --no-verify gets you in anyway)
 `+spent("jev-latest", 2), "")
 }
 
@@ -531,7 +531,7 @@ func TestWarningsLetTheCommitIn(t *testing.T) {
 	expect(t, staged, exitPass, `  main_test.go +7 -0
     ! weakened-tests          80%  Tests are skipped, disabled, removed, or made weaker.
 
-sven: Na jut, rin mit dir. Aber benimm dich.
+! sven: na jut, rin mit dir. aber benimm dich.
 `+spent("jev-latest", 1), "")
 }
 
@@ -546,8 +546,8 @@ func TestErrorsAndWarningsTogether(t *testing.T) {
   main_test.go +7 -0
     ! weakened-tests          80%  Tests are skipped, disabled, removed, or made weaker.
 
-sven: heute leider nicht.
-      (git commit --no-verify gets you in anyway)
+✗ sven: heute leider nicht.
+        (git commit --no-verify gets you in anyway)
 `+spent("jev-latest", 2), "")
 }
 
@@ -563,8 +563,8 @@ func TestConfigRaisesWarningToError(t *testing.T) {
 	expect(t, staged, exitRejected, `  main_test.go +7 -0
     ✗ weakened-tests          80%  Does `+"`diff`"+` skip, disable, or remove tests?
 
-sven: heute leider nicht.
-      (git commit --no-verify gets you in anyway)
+✗ sven: heute leider nicht.
+        (git commit --no-verify gets you in anyway)
 `+spent("jev-latest", 1), "")
 }
 
@@ -646,8 +646,8 @@ func TestColorWhenForced(t *testing.T) {
 	expect(t, staged, exitRejected, "  \x1b[1mmain.go\x1b[0m \x1b[32m+1\x1b[0m \x1b[31m-0\x1b[0m\n"+
 		"    \x1b[31m✗ debug-leftovers       \x1b[0m  93%  Added lines contain temporary debugging code that was not meant to be committed.\n"+
 		"\n"+
-		"\x1b[1m\x1b[31msven: heute leider nicht.\x1b[0m\x1b[0m\n"+
-		"\x1b[2m      (git commit --no-verify gets you in anyway)\x1b[0m\n"+
+		"\x1b[1m\x1b[31m✗ sven: heute leider nicht.\x1b[0m\x1b[0m\n"+
+		"\x1b[2m        (git commit --no-verify gets you in anyway)\x1b[0m\n"+
 		"\x1b[2m"+strings.TrimSuffix(spent("jev-latest", 1), "\n")+"\x1b[0m\n", "")
 }
 

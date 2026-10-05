@@ -414,16 +414,16 @@ func printVerdict(w io.Writer, report bouncer.Report, p palette) {
 	case report.Rejected():
 		printTurnedAway(w, p)
 	case len(report.Violations()) > 0:
-		fmt.Fprintln(w, p.yellow("sven: Na jut, rin mit dir. Aber benimm dich."))
+		fmt.Fprintln(w, p.yellow("! sven: na jut, rin mit dir. aber benimm dich."))
 	default:
-		fmt.Fprintln(w, p.green("sven: Na logen. Rin mit dir."))
+		fmt.Fprintln(w, p.green("✓ sven: na logen. rin mit dir."))
 	}
 }
 
 // printTurnedAway ends a check that found error-level violations.
 func printTurnedAway(w io.Writer, p palette) {
-	fmt.Fprintln(w, p.bold(p.red("sven: heute leider nicht.")))
-	fmt.Fprintln(w, p.dim("      (git commit --no-verify gets you in anyway)"))
+	fmt.Fprintln(w, p.bold(p.red("✗ sven: heute leider nicht.")))
+	fmt.Fprintln(w, p.dim("        (git commit --no-verify gets you in anyway)"))
 }
 
 var marks = map[bouncer.Level]string{bouncer.OK: "✓", bouncer.Warn: "!", bouncer.Error: "✗"}
