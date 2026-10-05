@@ -56,7 +56,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	return 0
 }
 
-func evaluate(ctx context.Context, configPath, casesDir, cacheDir string, catchall []string, lines, verbose bool, w io.Writer) error {
+func evaluate(ctx context.Context, configPath, casesDir, cacheDir string, catchall []string, lines, verbose bool, w io.Writer) (err error) {
 	tree, err := config.Load(".", configPath)
 	if err != nil {
 		return err
@@ -77,10 +77,11 @@ func evaluate(ctx context.Context, configPath, casesDir, cacheDir string, catcha
 	if err != nil {
 		return err
 	}
-	evaluator, err := cache.New(cacheDir, client.Endpoint()+" "+client.Model(), bouncer.Limit(client, 8, nil))
+	evaluator, err := cache.Open(cacheDir, client.Endpoint()+" "+client.Model(), bouncer.Limit(client, 8, nil))
 	if err != nil {
 		return err
 	}
+	defer func() { err = errors.Join(err, evaluator.Close()) }()
 	targets := make([]bouncer.Target, len(cases))
 	for i, c := range cases {
 		advice := cfg.Advice

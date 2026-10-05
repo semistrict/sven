@@ -12,6 +12,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/signal"
 	"path"
@@ -230,12 +231,19 @@ func check(ctx context.Context, args []string, stdin io.Reader, stdout, stderr i
 		inFlight = prog.requests
 	}
 	// The cache answers first, so only real requests wait for a slot.
-	evaluator, err := cache.New(filepath.Join(root, cacheDir), client.Endpoint()+" "+client.Model(),
+	evaluator, err := cache.Open(filepath.Join(root, cacheDir), client.Endpoint()+" "+client.Model(),
 		bouncer.Limit(client, *parallel, inFlight))
 	if err != nil {
 		prog.finish()
 		return false, err
 	}
+	// Answers are saved even when the check is interrupted, so the next run
+	// picks up where this one stopped. Failing to save only costs requests.
+	defer func() {
+		if err := evaluator.Close(); err != nil {
+			slog.Warn("sven: saving answers", "err", err)
+		}
+	}()
 	b := bouncer.Bouncer{Evaluator: evaluator, ChunkBytes: chunkBytes, Lines: *lines}
 	if prog != nil {
 		b.Judged = prog.judged

@@ -112,7 +112,8 @@ evals/prs.sh prometheus/prometheus results/ 20
 ```
 
 Each file is judged alone, from its own diff, in parallel. Answers are cached in
-`.sven/cache`, so re-runs are free.
+`.sven/cache`, so re-runs are free; the cache keeps what was used most recently
+in about 40 MB.
 
 ## Usage
 
