@@ -8,6 +8,9 @@ export default defineConfig({
 		name: "sven",
 		compatibilityDate: "2026-10-01",
 		entrypoint: "src/index.ts",
+		// sven.ramon3525.workers.dev stays up for clients that predate the domain.
+		domains: ["sven.semistrict.com"],
+		workersDev: true,
 		observability: {
 			enabled: true,
 		},

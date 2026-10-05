@@ -23,7 +23,7 @@ const (
 
 	// SvenBaseURL serves the free sven API, which answers sven's built-in
 	// rules with Jev at no charge.
-	SvenBaseURL = "https://sven.ramon3525.workers.dev"
+	SvenBaseURL = "https://sven.semistrict.com"
 	SvenName    = "the free sven API"
 
 	// SvenConsentHeader carries a project's consent to the free sven API
