@@ -5,9 +5,9 @@ gut call, and lets you in or doesn't.
 
 ```
 $ git commit -m "fix login"
-  auth/login.go
+  auth/login.go +15 -0
     ✗ debug-leftovers         92%  Added lines contain temporary debugging code that was not meant to be committed.
-  auth/login_test.go
+  auth/login_test.go +11 -0
     ! weakened-tests          96%  Tests are skipped, disabled, removed, or made weaker.
 
 sven: heute leider nicht.

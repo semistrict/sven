@@ -60,6 +60,21 @@ func Parse(r io.Reader) ([]File, error) {
 	return files, sc.Err()
 }
 
+// Stat counts the lines the file's hunks add and remove.
+func (f File) Stat() (added, removed int) {
+	for _, h := range f.Hunks {
+		for _, line := range h.Lines {
+			switch {
+			case strings.HasPrefix(line, "+"):
+				added++
+			case strings.HasPrefix(line, "-"):
+				removed++
+			}
+		}
+	}
+	return added, removed
+}
+
 // path extracts the path from a "---" or "+++" header, unquoting git's
 // C-style quoting. It reports false for /dev/null.
 func path(s, prefix string) (string, bool) {

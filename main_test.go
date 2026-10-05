@@ -39,7 +39,7 @@ const (
 	clean = "package main\n\nfunc main() {\n}\n"
 	dirty = "package main\n\nfunc main() {\n\tprintln(\"here\")\n}\n"
 
-	rejected = `  main.go
+	rejected = `  main.go +1 -0
     ✗ debug-leftovers         93%  Added lines contain temporary debugging code that was not meant to be committed.
 
 sven: heute leider nicht.
@@ -171,10 +171,10 @@ rules:
 	stage(t, "main.go", dirty)
 	stage(t, "ok.go", clean)
 
-	expect(t, []string{"check", "--cached", "-v"}, exitRejected, `  main.go
+	expect(t, []string{"check", "--cached", "-v"}, exitRejected, `  main.go +1 -0
     ✗ debug-leftovers         93%  Do the lines added in `+"`diff`"+` include leftover debugging code?
     ✓ no-yelling               2%
-  ok.go
+  ok.go +4 -0
     ✓ debug-leftovers          2%
     ✓ no-yelling               2%
 
@@ -429,7 +429,7 @@ func TestPathsResolveFromWorkingDirectory(t *testing.T) {
 	stage(t, "sub/main.go", dirty)
 	t.Chdir("sub")
 
-	expect(t, []string{"check", "--cached", "main.go"}, exitRejected, strings.Replace(rejected, "  main.go", "  sub/main.go", 1)+spent("jev-latest", 1), "")
+	expect(t, []string{"check", "--cached", "main.go"}, exitRejected, strings.Replace(rejected, "  main.go +1 -0", "  sub/main.go +5 -0", 1)+spent("jev-latest", 1), "")
 }
 
 // TestPathWithoutStagedChanges is pre-commit run --all-files: every file is
@@ -520,7 +520,7 @@ func TestWarningsLetTheCommitIn(t *testing.T) {
 	typesafe(t)
 	stage(t, "main_test.go", skipped)
 
-	expect(t, staged, exitPass, `  main_test.go
+	expect(t, staged, exitPass, `  main_test.go +7 -0
     ! weakened-tests          80%  Tests are skipped, disabled, removed, or made weaker.
 
 sven: Na jut, rin mit dir. Aber benimm dich.
@@ -533,9 +533,9 @@ func TestErrorsAndWarningsTogether(t *testing.T) {
 	stage(t, "main_test.go", skipped)
 	stage(t, "main.go", dirty)
 
-	expect(t, staged, exitRejected, `  main.go
+	expect(t, staged, exitRejected, `  main.go +1 -0
     ✗ debug-leftovers         93%  Added lines contain temporary debugging code that was not meant to be committed.
-  main_test.go
+  main_test.go +7 -0
     ! weakened-tests          80%  Tests are skipped, disabled, removed, or made weaker.
 
 sven: heute leider nicht.
@@ -552,7 +552,7 @@ func TestConfigRaisesWarningToError(t *testing.T) {
 `)
 	stage(t, "main_test.go", skipped)
 
-	expect(t, staged, exitRejected, `  main_test.go
+	expect(t, staged, exitRejected, `  main_test.go +7 -0
     ✗ weakened-tests          80%  Does `+"`diff`"+` skip, disable, or remove tests?
 
 sven: heute leider nicht.
@@ -585,7 +585,7 @@ func TestWorkingTreeByDefault(t *testing.T) {
 	stage(t, "main.go", clean+"\nfunc helper() {}\n")
 	write(t, "main.go", dirty)
 
-	expect(t, []string{"check"}, exitRejected, rejected+spent("jev-latest", 1), "")
+	expect(t, []string{"check"}, exitRejected, strings.Replace(rejected, "+1 -0", "+1 -2", 1)+spent("jev-latest", 1), "")
 	expect(t, staged, exitPass, letIn+spent("jev-latest", 1), "")
 }
 
@@ -622,7 +622,7 @@ func TestGitDiffArgumentsPassThrough(t *testing.T) {
 	stage(t, "other.go", dirty)
 	gitRun(t, "commit", "-q", "-m", "two files")
 
-	expect(t, []string{"check", "HEAD~1", "--", "other.go"}, exitRejected, strings.Replace(rejected, "  main.go", "  other.go", 1)+spent("jev-latest", 1), "")
+	expect(t, []string{"check", "HEAD~1", "--", "other.go"}, exitRejected, strings.Replace(rejected, "  main.go +1 -0", "  other.go +5 -0", 1)+spent("jev-latest", 1), "")
 
 	if got := srv.Paths(); len(got) != 1 {
 		t.Errorf("requests = %q, want 1", got)
@@ -635,7 +635,7 @@ func TestColorWhenForced(t *testing.T) {
 	t.Setenv("CLICOLOR_FORCE", "1")
 	stage(t, "main.go", dirty)
 
-	expect(t, staged, exitRejected, "  \x1b[1mmain.go\x1b[0m\n"+
+	expect(t, staged, exitRejected, "  \x1b[1mmain.go\x1b[0m \x1b[32m+1\x1b[0m \x1b[31m-0\x1b[0m\n"+
 		"    \x1b[31m✗ debug-leftovers       \x1b[0m  93%  Added lines contain temporary debugging code that was not meant to be committed.\n"+
 		"\n"+
 		"\x1b[1m\x1b[31msven: heute leider nicht.\x1b[0m\x1b[0m\n"+
@@ -679,7 +679,7 @@ func TestAllChecksEveryTrackedFile(t *testing.T) {
 	gitRun(t, "commit", "-q", "-m", "tool")
 
 	expect(t, []string{"check"}, exitPass, "sven: nothing to check: no unstaged changes. For staged ones, use sven check --cached; new files need git add first.\n", "")
-	expect(t, []string{"check", "--all"}, exitRejected, strings.Replace(rejected, "  main.go", "  lib/tool.go", 1)+spent("jev-latest", 2), "")
+	expect(t, []string{"check", "--all"}, exitRejected, strings.Replace(rejected, "  main.go +1 -0", "  lib/tool.go", 1)+spent("jev-latest", 2), "")
 	expect(t, []string{"check", "--all", "--", "main.go"}, exitPass, letIn+cached, "")
 
 	if got := srv.Paths(); len(got) != 2 {
@@ -715,7 +715,7 @@ func TestCommitRootIsCheckedFromTheEmptyTree(t *testing.T) {
 	typesafe(t)
 
 	expect(t, []string{"check", "--commit", "HEAD", "--only", "debug-leftovers", "-v"}, exitPass,
-		"  main.go\n    ✓ debug-leftovers          2%\n\n"+letIn+spent("jev-latest", 1), "")
+		"  main.go +4 -0\n    ✓ debug-leftovers          2%\n\n"+letIn+spent("jev-latest", 1), "")
 }
 
 func TestCommitMergeIsComparedToItsFirstParent(t *testing.T) {
@@ -730,7 +730,7 @@ func TestCommitMergeIsComparedToItsFirstParent(t *testing.T) {
 	gitRun(t, "merge", "-q", "--no-ff", "--no-edit", "side")
 
 	// One request: lib.go, which the merge brought in, and not other.go.
-	expect(t, []string{"check", "--commit", "HEAD"}, exitRejected, strings.Replace(rejected, "  main.go", "  lib.go", 1)+spent("jev-latest", 1), "")
+	expect(t, []string{"check", "--commit", "HEAD"}, exitRejected, strings.Replace(rejected, "  main.go +1 -0", "  lib.go +5 -0", 1)+spent("jev-latest", 1), "")
 }
 
 func TestInterruptPrintsWhatWasJudged(t *testing.T) {

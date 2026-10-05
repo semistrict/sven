@@ -194,7 +194,13 @@ func check(ctx context.Context, args []string, stdin io.Reader, stdout, stderr i
 		return false, fmt.Errorf("parsing diff: %w", err)
 	}
 	var targets []bouncer.Target
+	// changed holds each file's diff, to show its diffstat; with --all, the
+	// whole file is judged.
+	changed := map[string]diff.File{}
 	for _, f := range files {
+		if !*all {
+			changed[f.Path] = f
+		}
 		c, err := tree.For(path.Dir(f.Path))
 		if err != nil {
 			return false, err
@@ -238,7 +244,7 @@ func check(ctx context.Context, args []string, stdin io.Reader, stdout, stderr i
 	if err != nil && ctx.Err() == nil {
 		return false, err
 	}
-	printVerdicts(stdout, report, *verbose, p)
+	printVerdicts(stdout, report, changed, *verbose, p)
 	if err != nil {
 		fmt.Fprintln(stdout, p.yellow(fmt.Sprintf("sven: interrupted after judging %d of %d files. Run again to pick up where it stopped.", report.Files, len(targets))))
 	} else {
@@ -358,8 +364,9 @@ func (l *ruleList) Set(v string) error {
 // errInterrupted ends a check stopped by Ctrl-C, after its partial report.
 var errInterrupted = errors.New("interrupted")
 
-// printVerdicts lists the violations in report, or every verdict if verbose.
-func printVerdicts(w io.Writer, report bouncer.Report, verbose bool, p palette) {
+// printVerdicts lists the violations in report, or every verdict if verbose,
+// under each file's path and, if it's in changed, its diffstat.
+func printVerdicts(w io.Writer, report bouncer.Report, changed map[string]diff.File, verbose bool, p palette) {
 	shown := report.Violations()
 	if verbose {
 		shown = report.Verdicts
@@ -369,7 +376,12 @@ func printVerdicts(w io.Writer, report bouncer.Report, verbose bool, p palette) 
 	for _, v := range shown {
 		if v.Path != path {
 			path = v.Path
-			fmt.Fprintf(w, "  %s\n", p.bold(path))
+			header := p.bold(path)
+			if f, ok := changed[path]; ok {
+				added, removed := f.Stat()
+				header += " " + p.green(fmt.Sprintf("+%d", added)) + " " + p.red(fmt.Sprintf("-%d", removed))
+			}
+			fmt.Fprintf(w, "  %s\n", header)
 		}
 		why := ""
 		if v.Level() != bouncer.OK {

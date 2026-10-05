@@ -110,3 +110,13 @@ func TestChunksSplitsOversizedHunk(t *testing.T) {
 		t.Errorf("Chunks = %q, want %q", got, want)
 	}
 }
+
+func TestStat(t *testing.T) {
+	f := File{Path: "a.go", Hunks: []Hunk{
+		{Header: "@@ -1,3 +1,3 @@", Lines: []string{" keep", "-old", "+new", "+more"}},
+		{Header: "@@ -9 +10 @@", Lines: []string{"-gone", `\ No newline at end of file`}},
+	}}
+	if added, removed := f.Stat(); added != 2 || removed != 2 {
+		t.Errorf("Stat() = +%d -%d, want +2 -2", added, removed)
+	}
+}
