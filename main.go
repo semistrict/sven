@@ -194,6 +194,7 @@ func check(ctx context.Context, args []string, stdin io.Reader, stdout, stderr i
 	})
 	if prog != nil {
 		b.Judged = prog.judged
+		b.Requests = prog.requests
 	}
 	report, err := b.Check(ctx, targets)
 	prog.finish()

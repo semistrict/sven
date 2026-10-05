@@ -35,6 +35,8 @@ type flagged struct {
 // status is what the live status line shows at one moment.
 type status struct {
 	total, done, rejected, warned int
+	// inFlight counts requests to the model under way.
+	inFlight int
 	// recent holds the latest flagged files, newest first.
 	recent  []flagged
 	last    string
@@ -93,6 +95,14 @@ func (s status) render(p palette) []string {
 		segment{fmt.Sprintf("! %d", s.warned), p.yellow},
 		segment{"  " + timing + " · " + s.cost, p.dim},
 	)}
+	about := fmt.Sprintf("  %d requests in flight", s.inFlight)
+	switch {
+	case len(s.recent) > 0:
+		about += " · recently flagged:"
+	case s.last != "":
+		about += " · last in: " + s.last
+	}
+	lines = append(lines, line(s.width, segment{about, p.dim}))
 	for _, f := range s.recent {
 		mark, paint := "!", p.yellow
 		if f.level == bouncer.Error {
@@ -103,9 +113,6 @@ func (s status) render(p palette) []string {
 			segment{f.path, p.bold},
 			segment{"  " + strings.Join(f.rules, ", "), p.dim},
 		))
-	}
-	if len(s.recent) == 0 && s.last != "" {
-		lines = append(lines, line(s.width, segment{"  last in: " + s.last, p.dim}))
 	}
 	return lines
 }
@@ -165,6 +172,13 @@ func startProgress(out io.Writer, p palette, total int, price func(systemone.Usa
 		}
 	})
 	return g
+}
+
+// requests counts requests under way; it fits bouncer.Bouncer.Requests.
+func (g *progress) requests(delta int) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.s.inFlight += delta
 }
 
 // judged records a judged file; it fits bouncer.Bouncer.Judged.

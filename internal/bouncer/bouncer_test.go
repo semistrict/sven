@@ -298,3 +298,29 @@ func TestInterruptedCheckKeepsJudgedFiles(t *testing.T) {
 		t.Errorf("report = %+v, want %+v", report, want)
 	}
 }
+
+func TestRequestsCountsWhatIsInFlight(t *testing.T) {
+	var mu sync.Mutex
+	inFlight, most, starts := 0, 0, 0
+	b := Bouncer{Evaluator: &judge{p: contains("x", 0)}, ChunkBytes: 1000, Concurrency: 2, Requests: func(delta int) {
+		mu.Lock()
+		defer mu.Unlock()
+		inFlight += delta
+		most = max(most, inFlight)
+		if delta > 0 {
+			starts++
+		}
+	}}
+	var targets []Target
+	for _, name := range []string{"a.go", "b.go", "c.go", "d.go", "e.go"} {
+		targets = append(targets, target(name, rules, "+x"))
+	}
+
+	if _, err := b.Check(t.Context(), targets); err != nil {
+		t.Fatal(err)
+	}
+
+	if inFlight != 0 || starts != 5 || most < 1 || most > 2 {
+		t.Errorf("in flight at end = %d, starts = %d, most at once = %d; want 0, 5, and at most the concurrency of 2", inFlight, starts, most)
+	}
+}

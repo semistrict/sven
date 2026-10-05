@@ -16,6 +16,7 @@ func TestStatusMidway(t *testing.T) {
 		done:     30,
 		rejected: 2,
 		warned:   1,
+		inFlight: 8,
 		recent: []flagged{
 			{path: "auth/login.go", level: bouncer.Error, rules: []string{"debug-leftovers", "sus"}},
 			{path: "auth/login_test.go", level: bouncer.Warn, rules: []string{"weakened-tests"}},
@@ -28,6 +29,7 @@ func TestStatusMidway(t *testing.T) {
 
 	want := []string{
 		"⠸ sven at the door  ████░░░░░░░░░░░░ 30/120  ✗ 2  ! 1  0:15 · ~0:45 left · $0.0013",
+		"  8 requests in flight · recently flagged:",
 		"  ✗ auth/login.go  debug-leftovers, sus",
 		"  ! auth/login_test.go  weakened-tests",
 	}
@@ -41,7 +43,7 @@ func TestStatusShowsLastFileUntilSomethingIsFlagged(t *testing.T) {
 
 	want := []string{
 		"⠋ sven at the door  ████████████████ 2/2  ✗ 0  ! 0  1:01 · free",
-		"  last in: README.md",
+		"  0 requests in flight · last in: README.md",
 	}
 	if got := s.render(false); !reflect.DeepEqual(got, want) {
 		t.Errorf("render =\n%s\nwant\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
@@ -50,15 +52,17 @@ func TestStatusShowsLastFileUntilSomethingIsFlagged(t *testing.T) {
 
 func TestStatusFitsNarrowTerminals(t *testing.T) {
 	s := status{
-		total:  10,
-		done:   1,
-		recent: []flagged{{path: "a/very/long/path/to/some/file.go", level: bouncer.Error, rules: []string{"sus"}}},
-		cost:   "free",
-		width:  24,
+		total:    10,
+		done:     1,
+		inFlight: 3,
+		recent:   []flagged{{path: "a/very/long/path/to/some/file.go", level: bouncer.Error, rules: []string{"sus"}}},
+		cost:     "free",
+		width:    24,
 	}
 
 	want := []string{
 		"⠋ sven at the door  █░░…",
+		"  3 requests in flight …",
 		"  ✗ a/very/long/path/to…",
 	}
 	if got := s.render(false); !reflect.DeepEqual(got, want) {

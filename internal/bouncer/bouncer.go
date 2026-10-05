@@ -73,6 +73,9 @@ type Bouncer struct {
 	// its chunks are judged, and with the usage of the check so far. Calls
 	// never overlap.
 	Judged func(path string, verdicts []Verdict, usage systemone.Usage)
+	// Requests, if set, is called with +1 as each request to the model starts
+	// and -1 as it ends, from many goroutines at once.
+	Requests func(delta int)
 }
 
 // Verdict is how likely one file violates one rule.
@@ -173,7 +176,13 @@ func (b Bouncer) Check(ctx context.Context, targets []Target) (Report, error) {
 			}
 			defer func() { <-sem }()
 			t := targets[j.target]
+			if b.Requests != nil {
+				b.Requests(+1)
+			}
 			resp, err := b.Evaluator.Evaluate(ctx, j.state, j.questions)
+			if b.Requests != nil {
+				b.Requests(-1)
+			}
 			if err != nil {
 				cancel(fmt.Errorf("checking %s: %w", t.File.Path, err))
 				return
