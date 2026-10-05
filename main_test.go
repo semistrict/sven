@@ -184,7 +184,7 @@ func TestNothingStaged(t *testing.T) {
 	repo(t)
 	srv := typesafe(t)
 
-	expect(t, staged, exitPass, "sven: nothing to check.\n", "")
+	expect(t, staged, exitPass, "sven: nothing to check: no staged changes.\n", "")
 
 	if got := srv.Paths(); len(got) != 0 {
 		t.Errorf("requests = %q, want none", got)
@@ -197,7 +197,7 @@ func TestExcludedPathsAreSkipped(t *testing.T) {
 	stage(t, "go.sum", "example.com/x v1.0.0 h1:abc=\n")
 	stage(t, "vendor/x/x.go", dirty)
 
-	expect(t, staged, exitPass, "sven: nothing to check.\n", "")
+	expect(t, staged, exitPass, "sven: nothing to check: every changed file is excluded or has no rules.\n", "")
 
 	if got := srv.Paths(); len(got) != 0 {
 		t.Errorf("requests = %q, want none", got)
@@ -210,7 +210,7 @@ func TestRevisionRange(t *testing.T) {
 	stage(t, "main.go", dirty)
 	gitRun(t, "commit", "-q", "-m", "oops")
 
-	expect(t, staged, exitPass, "sven: nothing to check.\n", "")
+	expect(t, staged, exitPass, "sven: nothing to check: no staged changes.\n", "")
 	expect(t, []string{"check", "HEAD~1..HEAD"}, exitRejected, rejected+spent("jev-latest", 1), "")
 }
 
@@ -436,7 +436,7 @@ func TestPathWithoutStagedChanges(t *testing.T) {
 	srv := typesafe(t)
 	write(t, "main.go", dirty)
 
-	expect(t, []string{"check", "--cached", "main.go"}, exitPass, "sven: nothing to check.\n", "")
+	expect(t, []string{"check", "--cached", "main.go"}, exitPass, "sven: nothing to check: no staged changes.\n", "")
 
 	if got := srv.Paths(); len(got) != 0 {
 		t.Errorf("requests = %q, want none", got)
@@ -477,7 +477,7 @@ func TestNestedConfigWithoutRulesSkipsTheFile(t *testing.T) {
 	write(t, "scratch/"+config.FileName, "inherit_rules: false\n")
 	stage(t, "scratch/play.go", dirty)
 
-	expect(t, staged, exitPass, "sven: nothing to check.\n", "")
+	expect(t, staged, exitPass, "sven: nothing to check: every changed file is excluded or has no rules.\n", "")
 
 	if got := srv.Paths(); len(got) != 0 {
 		t.Errorf("requests = %q, want none", got)
@@ -503,7 +503,7 @@ func TestConfigFilesAreNotJudged(t *testing.T) {
 	srv := typesafe(t)
 	stage(t, "scripts/"+config.FileName, "rules:\n  - {id: debug-leftovers, disabled: true}\n")
 
-	expect(t, staged, exitPass, "sven: nothing to check.\n", "")
+	expect(t, staged, exitPass, "sven: nothing to check: every changed file is excluded or has no rules.\n", "")
 
 	if got := srv.Paths(); len(got) != 0 {
 		t.Errorf("requests = %q, want none", got)
@@ -659,4 +659,12 @@ func TestNoColorWins(t *testing.T) {
 			expect(t, tc.args, exitRejected, rejected+spent("jev-latest", 1), "")
 		})
 	}
+}
+
+func TestNothingToCheckSaysWhy(t *testing.T) {
+	repo(t)
+	typesafe(t)
+
+	expect(t, []string{"check"}, exitPass, "sven: nothing to check: no unstaged changes. For staged ones, use sven check --cached; new files need git add first.\n", "")
+	expect(t, []string{"check", "HEAD", "--", "main.go"}, exitPass, "sven: nothing to check: git diff HEAD -- main.go shows no changes.\n", "")
 }

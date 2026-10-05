@@ -16,6 +16,7 @@ import (
 	"os/signal"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/semistrict/sven/internal/bouncer"
@@ -154,7 +155,7 @@ func check(ctx context.Context, args []string, stdin io.Reader, stdout, stderr i
 		}
 	}
 	if len(targets) == 0 {
-		fmt.Fprintln(stdout, "sven: nothing to check.")
+		fmt.Fprintln(stdout, "sven: nothing to check: "+emptyBecause(*patch, diffArgs, len(files)))
 		return false, nil
 	}
 
@@ -174,6 +175,25 @@ func check(ctx context.Context, args []string, stdin io.Reader, stdout, stderr i
 	printReport(stdout, report, *verbose, p)
 	fmt.Fprintln(stdout, p.dim("sven: "+report.Usage.Summary(client.Name())))
 	return report.Rejected(), nil
+}
+
+// emptyBecause explains why a check found nothing to judge.
+func emptyBecause(patch bool, diffArgs []string, files int) string {
+	opts := diffArgs
+	if i := slices.Index(diffArgs, "--"); i >= 0 {
+		opts = diffArgs[:i]
+	}
+	switch {
+	case files > 0:
+		return "every changed file is excluded or has no rules."
+	case patch:
+		return "the patch changes no files."
+	case slices.Contains(opts, "--cached") || slices.Contains(opts, "--staged"):
+		return "no staged changes."
+	case len(opts) == 0:
+		return "no unstaged changes. For staged ones, use sven check --cached; new files need git add first."
+	}
+	return "git diff " + strings.Join(diffArgs, " ") + " shows no changes."
 }
 
 // splitArgs separates sven's own flags from the arguments it passes on to
