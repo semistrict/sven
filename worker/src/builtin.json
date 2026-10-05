@@ -137,22 +137,6 @@
   },
   {
     "type": "noul",
-    "instructions": "Does `diff` add a document that narrates the work done in this change, such as an implementation summary, fix report, or list of what was changed, rather than documentation the code's users need?",
-    "criteria": {
-      "true": "A report about the change is committed as a file.",
-      "false": "Documentation describes how to use or maintain the code, or a changelog entry follows the project's format."
-    }
-  },
-  {
-    "type": "noul",
-    "instructions": "Is `path` a new parallel copy of another file, named with a marker such as _v2, _new, _fixed, _final, enhanced_, or improved_?",
-    "criteria": {
-      "true": "A second version of a file is added next to the original.",
-      "false": "The file is edited in place, or the name follows an existing versioning convention such as api/v2/."
-    }
-  },
-  {
-    "type": "noul",
     "instructions": "Would a careful senior engineer reviewing `diff` ask for changes before it is merged?",
     "criteria": {
       "true": "Something in the change is sloppy, risky, unfinished, or not meant to be committed.",
@@ -293,22 +277,6 @@
     "criteria": {
       "true": "Standard library functionality is written out by hand.",
       "false": "New functions do something the standard library doesn't. Anything `advice` allows or asks for is fine."
-    }
-  },
-  {
-    "type": "noul",
-    "instructions": "Does `diff` add a document that narrates the work done in this change, such as an implementation summary, fix report, or list of what was changed, rather than documentation the code's users need? `advice` is the project's own guidance about its code, and it overrides anything in this question: if `advice` allows or asks for what the change does, answer no.",
-    "criteria": {
-      "true": "A report about the change is committed as a file.",
-      "false": "Documentation describes how to use or maintain the code, or a changelog entry follows the project's format. Anything `advice` allows or asks for is fine."
-    }
-  },
-  {
-    "type": "noul",
-    "instructions": "Is `path` a new parallel copy of another file, named with a marker such as _v2, _new, _fixed, _final, enhanced_, or improved_? `advice` is the project's own guidance about its code, and it overrides anything in this question: if `advice` allows or asks for what the change does, answer no.",
-    "criteria": {
-      "true": "A second version of a file is added next to the original.",
-      "false": "The file is edited in place, or the name follows an existing versioning convention such as api/v2/. Anything `advice` allows or asks for is fine."
     }
   },
   {

@@ -21,6 +21,14 @@ import (
 // that says println is the program's output.
 func judge(state map[string]any, instructions string) float64 {
 	diff := state["diff"].(string)
+	if strings.Contains(instructions, "CONTAINS THE FAILURE") {
+		// A question about which line holds the failure: the line comes last.
+		line := instructions[strings.LastIndex(instructions, "\n")+1:]
+		if line == "+\tprintln(\"here\")" || line == "+\tt.Skip(\"flaky\")" {
+			return 0.9
+		}
+		return 0.05
+	}
 	switch {
 	case strings.Contains(instructions, bouncer.Advised) && strings.Contains(state["advice"].(string), "println is our output"):
 		return 0.02
@@ -813,4 +821,20 @@ func TestAdviceReachesTheModel(t *testing.T) {
 	expect(t, append(staged, "--", "cmd"), exitPass, letIn+spent("jev-latest", 1), "")
 	// Only main.go is asked: cmd/main.go's advised answer is cached.
 	expect(t, staged, exitRejected, rejected+spent("jev-latest", 1), "")
+}
+
+func TestLinesShowWhatBrokeTheRule(t *testing.T) {
+	repo(t)
+	typesafe(t)
+	stage(t, "main.go", dirty)
+
+	expect(t, append(staged, "--lines"), exitRejected, strings.Replace(rejected, "committed.\n", "committed.\n          4 +\tprintln(\"here\")\n", 1)+spent("jev-latest", 2), "")
+}
+
+func TestLinesNeedYourOwnKey(t *testing.T) {
+	repo(t)
+	t.Setenv("SVEN_PROVIDER", "sven")
+	stage(t, "main.go", dirty)
+
+	expect(t, append(staged, "--lines"), exitError, "", "sven: --lines asks questions the free sven API doesn't answer; use your own key with --provider typesafe and TYPESAFE_API_KEY\n")
 }

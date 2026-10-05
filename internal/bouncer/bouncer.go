@@ -4,9 +4,11 @@
 package bouncer
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"math"
+	"slices"
 	"strings"
 	"sync"
 
@@ -51,7 +53,7 @@ const (
 
 // Noul is the rule as the question sent to the model, about a file with
 // advice if advised.
-func (r Rule) Noul(advised bool) systemone.Question {
+func (r Rule) Noul(advised bool) systemone.Noul {
 	q := systemone.Noul{Instructions: r.Question}
 	if r.Violation != "" {
 		q.True = r.Violation
@@ -64,6 +66,19 @@ func (r Rule) Noul(advised bool) systemone.Question {
 		q.False = strings.TrimSpace(r.OK + " " + advisedOK)
 	}
 	return q
+}
+
+// lineNoul asks whether one changed line holds the failure of a rule that
+// `diff` was found to break, which is somewhere among its lines.
+func (r Rule) lineNoul(line string) systemone.Noul {
+	failure := cmp.Or(r.Violation, "the rule is broken.")
+	return systemone.Noul{
+		Instructions: "This question was asked about `diff`: " + r.Question + "\n" +
+			"The answer is yes: " + failure + "\n" +
+			"So `diff` CONTAINS THE FAILURE ON ONE OR MORE OF ITS LINES. Your only job is to pick WHICH lines. Is the failure on this line?\n" + line,
+		True:  "The failure is on this line.",
+		False: "The failure is on other lines of `diff`, not this one.",
+	}
 }
 
 // Evaluator answers typed questions about a state; *systemone.Client is one.
@@ -84,11 +99,22 @@ type Bouncer struct {
 	Evaluator Evaluator
 	// ChunkBytes caps how much diff text goes into one request.
 	ChunkBytes int
+	// Lines, if set, asks about each changed line of a file that breaks a
+	// rule, to find the lines that do. A violation no line is likely to
+	// cause is dropped.
+	Lines bool
 	// Judged, if set, is called with each file's verdicts as soon as all of
 	// its chunks are judged, and with the usage of the check so far. Calls
 	// never overlap.
 	Judged func(path string, verdicts []Verdict, usage systemone.Usage)
 }
+
+// LineThreshold is how likely a changed line must be to break a rule to
+// count as one of the lines that do.
+const LineThreshold = 0.5
+
+// maxQuestions is the most questions one request asks.
+const maxQuestions = 64
 
 // Verdict is how likely one file violates one rule.
 type Verdict struct {
@@ -96,10 +122,23 @@ type Verdict struct {
 	Rule Rule
 	// P is the highest probability of a violation across the file's chunks.
 	P float64
+	// Located is whether each changed line was asked about, and Lines are
+	// the lines likely to break the rule. A located verdict without lines
+	// is OK.
+	Located bool
+	Lines   []Line
+}
+
+// Line is a changed line that likely breaks a rule.
+type Line struct {
+	diff.Change
+	P float64
 }
 
 func (v Verdict) Level() Level {
 	switch {
+	case v.Located && len(v.Lines) == 0:
+		return OK
 	case v.P >= v.Rule.Error:
 		return Error
 	case v.P >= v.Rule.Warn:
@@ -141,44 +180,53 @@ func (r Report) Rejected() bool {
 
 // job is one request: a chunk of one target's file.
 type job struct {
-	target    int
-	state     map[string]string
-	questions map[string]systemone.Question
+	target, chunk int
+	changes       []diff.Change
+	state         map[string]string
+	questions     map[string]systemone.Question
 }
 
 // Check judges every target's file against its rules. Targets without rules
 // are let through unasked. On an error, such as ctx being canceled, the
 // report still holds the files judged before it.
 func (b Bouncer) Check(ctx context.Context, targets []Target) (Report, error) {
-	var jobs []job
+	chunks := make([][]job, len(targets))
 	remaining := make([]int, len(targets))
+	// worst holds each target's rules' highest probabilities, and found
+	// each chunk's.
 	worst := make([][]float64, len(targets))
+	found := make([][][]float64, len(targets))
+	judged := make([][]Verdict, len(targets))
+	finished := make([]bool, len(targets))
 	for i, t := range targets {
 		worst[i] = make([]float64, len(t.Rules))
-		if len(t.Rules) == 0 {
+		finished[i] = len(t.Rules) == 0
+		if finished[i] {
 			continue
 		}
 		questions := make(map[string]systemone.Question, len(t.Rules))
 		for _, r := range t.Rules {
 			questions[r.ID] = r.Noul(t.Advice != "")
 		}
-		for _, chunk := range t.File.Chunks(b.ChunkBytes) {
-			state := map[string]string{"path": t.File.Path, "diff": chunk}
+		for c, chunk := range t.File.Chunks(b.ChunkBytes) {
+			state := map[string]string{"path": t.File.Path, "diff": chunk.Text}
 			if t.Advice != "" {
 				state["advice"] = t.Advice
 			}
-			jobs = append(jobs, job{target: i, state: state, questions: questions})
-			remaining[i]++
+			chunks[i] = append(chunks[i], job{target: i, chunk: c, changes: chunk.Changes, state: state, questions: questions})
+			found[i] = append(found[i], make([]float64, len(t.Rules)))
 		}
+		remaining[i] = len(chunks[i])
 	}
 
 	ctx, cancel := context.WithCancelCause(ctx)
 	defer cancel(nil)
 	var wg sync.WaitGroup
-	// mu guards worst, remaining, usage, and calls to Judged.
+	// mu guards remaining, worst, found, judged, finished, usage, and calls
+	// to Judged.
 	var mu sync.Mutex
 	var usage systemone.Usage
-	for _, j := range jobs {
+	for _, j := range slices.Concat(chunks...) {
 		// Every chunk is asked at once; Limit caps the requests that reach
 		// the model, so cached chunks don't queue behind them.
 		wg.Go(func() {
@@ -189,27 +237,117 @@ func (b Bouncer) Check(ctx context.Context, targets []Target) (Report, error) {
 				return
 			}
 			mu.Lock()
-			defer mu.Unlock()
 			usage = usage.Add(resp.Usage)
 			for r, rule := range t.Rules {
-				worst[j.target][r] = max(worst[j.target][r], resp.Answers[rule.ID].Noul)
+				p := resp.Answers[rule.ID].Noul
+				found[j.target][j.chunk][r] = p
+				worst[j.target][r] = max(worst[j.target][r], p)
 			}
 			remaining[j.target]--
-			if remaining[j.target] == 0 && b.Judged != nil {
-				b.Judged(t.File.Path, verdicts(t, worst[j.target]), usage)
+			last := remaining[j.target] == 0
+			mu.Unlock()
+			if !last {
+				return
+			}
+
+			vs := verdicts(t, worst[j.target])
+			if b.Lines {
+				used, err := b.locate(ctx, t, chunks[j.target], found[j.target], vs)
+				mu.Lock()
+				usage = usage.Add(used)
+				mu.Unlock()
+				if err != nil {
+					cancel(fmt.Errorf("finding the lines of %s: %w", t.File.Path, err))
+					return
+				}
+			}
+			mu.Lock()
+			defer mu.Unlock()
+			judged[j.target], finished[j.target] = vs, true
+			if b.Judged != nil {
+				b.Judged(t.File.Path, vs, usage)
 			}
 		})
 	}
 	wg.Wait()
 
 	report := Report{Usage: usage}
-	for i, t := range targets {
-		if remaining[i] == 0 {
+	for i := range targets {
+		if finished[i] {
 			report.Files++
-			report.Verdicts = append(report.Verdicts, verdicts(t, worst[i])...)
+			report.Verdicts = append(report.Verdicts, judged[i]...)
 		}
 	}
 	return report, context.Cause(ctx)
+}
+
+// locate asks, for each of a target's violations, which changed lines cause
+// it, in each chunk where it was found, and records the likely ones in vs.
+func (b Bouncer) locate(ctx context.Context, t Target, chunks []job, found [][]float64, vs []Verdict) (systemone.Usage, error) {
+	var wg sync.WaitGroup
+	// mu guards usage, errs, and ps, where ps[r][c] holds the probability
+	// that each distinct line of chunk c breaks rule r.
+	var mu sync.Mutex
+	var usage systemone.Usage
+	var errs []error
+	ps := make([][]map[string]float64, len(vs))
+	for r, v := range vs {
+		if v.Level() == OK {
+			continue
+		}
+		vs[r].Located = true
+		ps[r] = make([]map[string]float64, len(chunks))
+		for c, j := range chunks {
+			if found[c][r] < min(v.Rule.Error, v.Rule.Warn) {
+				continue
+			}
+			ps[r][c] = map[string]float64{}
+			for batch := range slices.Chunk(distinct(j.changes), maxQuestions) {
+				questions := make(map[string]systemone.Question, len(batch))
+				for k, line := range batch {
+					questions[fmt.Sprint("line-", k)] = v.Rule.lineNoul(line)
+				}
+				wg.Go(func() {
+					resp, err := b.Evaluator.Evaluate(ctx, j.state, questions)
+					mu.Lock()
+					defer mu.Unlock()
+					if err != nil {
+						errs = append(errs, err)
+						return
+					}
+					usage = usage.Add(resp.Usage)
+					for k, line := range batch {
+						ps[r][c][line] = resp.Answers[fmt.Sprint("line-", k)].Noul
+					}
+				})
+			}
+		}
+	}
+	wg.Wait()
+	if len(errs) > 0 {
+		return usage, errs[0]
+	}
+	for r := range vs {
+		for c, p := range ps[r] {
+			for _, change := range chunks[c].changes {
+				if p[change.Text] > LineThreshold {
+					vs[r].Lines = append(vs[r].Lines, Line{Change: change, P: p[change.Text]})
+				}
+			}
+		}
+	}
+	return usage, nil
+}
+
+// distinct returns the changed lines with something on them, once each.
+func distinct(changes []diff.Change) []string {
+	var lines []string
+	for _, c := range changes {
+		if strings.TrimSpace(c.Text[1:]) != "" && !slices.Contains(lines, c.Text) {
+			lines = append(lines, c.Text)
+		}
+	}
+	return lines
 }
 
 // verdicts pairs a target's rules with the highest probability seen for each.

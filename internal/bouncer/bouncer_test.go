@@ -3,6 +3,7 @@ package bouncer
 import (
 	"context"
 	"errors"
+	"fmt"
 	"reflect"
 	"slices"
 	"strings"
@@ -400,4 +401,123 @@ func TestNoAdviceLeavesTheQuestionsAlone(t *testing.T) {
 	if want := map[string]systemone.Question{"debug": systemone.Noul{Instructions: debug.Question}}; !reflect.DeepEqual(r.questions, want) {
 		t.Errorf("questions = %#v, want %#v", r.questions, want)
 	}
+}
+
+// lineJudge answers each rule question with rule[id], and each question
+// about one line with line[that line], recording the line questions asked.
+type lineJudge struct {
+	rule map[string]float64
+	line map[string]float64
+
+	mu    sync.Mutex
+	asked []string
+}
+
+func (j *lineJudge) Evaluate(_ context.Context, _ any, questions map[string]systemone.Question) (*systemone.Response, error) {
+	resp := &systemone.Response{Answers: map[string]systemone.Answer{}}
+	for id, q := range questions {
+		p, ok := j.rule[id]
+		if instructions := q.(systemone.Noul).Instructions.(string); strings.Contains(instructions, "CONTAINS THE FAILURE") {
+			line := instructions[strings.LastIndex(instructions, "\n")+1:]
+			j.mu.Lock()
+			j.asked = append(j.asked, line)
+			j.mu.Unlock()
+			p, ok = j.line[line], true
+		}
+		if !ok {
+			return nil, fmt.Errorf("unexpected question %s", id)
+		}
+		resp.Answers[id] = systemone.Answer{Type: systemone.KindNoul, Noul: p}
+	}
+	return resp, nil
+}
+
+func TestLinesFindTheLinesBehindAViolation(t *testing.T) {
+	j := &lineJudge{
+		rule: map[string]float64{"debug": 0.95, "todo": 0.1},
+		line: map[string]float64{"+println(x)": 0.9, "+y := 2": 0.2, "-z := 3": 0.1},
+	}
+	b := Bouncer{Evaluator: j, ChunkBytes: 1000, Lines: true}
+	tgt := Target{File: diff.File{Path: "a.go", Hunks: []diff.Hunk{
+		{Header: "@@ -10,2 +10,4 @@", Lines: []string{" keep", "+println(x)", "+y := 2", "+", "-z := 3", "+println(x)"}},
+	}}, Rules: rules}
+
+	report, err := b.Check(t.Context(), []Target{tgt})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := []Verdict{
+		{Path: "a.go", Rule: debug, P: 0.95, Located: true, Lines: []Line{
+			{Change: diff.Change{Line: 11, Text: "+println(x)"}, P: 0.9},
+			{Change: diff.Change{Line: 14, Text: "+println(x)"}, P: 0.9},
+		}},
+		{Path: "a.go", Rule: todo, P: 0.1},
+	}
+	if !reflect.DeepEqual(report.Verdicts, want) {
+		t.Errorf("Verdicts =\n%+v\nwant\n%+v", report.Verdicts, want)
+	}
+	// Each distinct line with something on it is asked about once, and only
+	// for the rule that fired.
+	slices.Sort(j.asked)
+	if want := []string{"+println(x)", "+y := 2", "-z := 3"}; !slices.Equal(j.asked, want) {
+		t.Errorf("asked about %q, want %q", j.asked, want)
+	}
+	if !report.Rejected() {
+		t.Error("Rejected = false, want true")
+	}
+}
+
+func TestLinesDropAViolationNoLineCauses(t *testing.T) {
+	j := &lineJudge{
+		rule: map[string]float64{"debug": 0.95, "todo": 0.1},
+		line: map[string]float64{"+fine()": 0.3},
+	}
+	b := Bouncer{Evaluator: j, ChunkBytes: 1000, Lines: true}
+
+	report, err := b.Check(t.Context(), []Target{target("a.go", rules, "+fine()")})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got := report.Verdicts[0]; !got.Located || len(got.Lines) != 0 || got.Level() != OK {
+		t.Errorf("debug verdict = %+v, level %v; want located, without lines, OK", got, got.Level())
+	}
+	if report.Rejected() {
+		t.Error("Rejected = true, want false")
+	}
+}
+
+func TestLinesAskOnlyInChunksWhereTheRuleFired(t *testing.T) {
+	j := &lineJudge{line: map[string]float64{"+println(a)": 0.9}}
+	b := Bouncer{Evaluator: &chunkJudge{j}, ChunkBytes: 30, Lines: true}
+	tgt := Target{File: diff.File{Path: "a.go", Hunks: []diff.Hunk{
+		{Header: "@@ -1 +1 @@", Lines: []string{"+println(a)"}},
+		{Header: "@@ -9 +9 @@", Lines: []string{"+fine(b)"}},
+	}}, Rules: []Rule{debug}}
+
+	report, err := b.Check(t.Context(), []Target{tgt})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if want := []string{"+println(a)"}; !slices.Equal(j.asked, want) {
+		t.Errorf("asked about %q, want %q", j.asked, want)
+	}
+	if got := report.Verdicts[0].Lines; len(got) != 1 || got[0].Line != 1 {
+		t.Errorf("Lines = %+v, want line 1", got)
+	}
+}
+
+// chunkJudge answers rule questions by whether the chunk prints, and line
+// questions with its lineJudge.
+type chunkJudge struct{ *lineJudge }
+
+func (c *chunkJudge) Evaluate(ctx context.Context, state any, questions map[string]systemone.Question) (*systemone.Response, error) {
+	p := 0.1
+	if strings.Contains(state.(map[string]string)["diff"], "println") {
+		p = 0.95
+	}
+	c.rule = map[string]float64{"debug": p}
+	return c.lineJudge.Evaluate(ctx, state, questions)
 }

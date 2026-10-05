@@ -42,20 +42,21 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	verbose := fs.Bool("v", false, "list every probability, not just mistakes")
 	cacheDir := fs.String("cache", filepath.Join(".sven", "cache"), "where to remember answers")
 	catchall := fs.String("catchall", "sus", "comma-separated rules expected to fire on every case that breaks any rule")
+	lines := fs.Bool("lines", false, "find the lines behind each violation, dropping violations no line is likely to cause")
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
 		}
 		return 2
 	}
-	if err := evaluate(ctx, *configPath, *casesDir, *cacheDir, strings.Split(*catchall, ","), *verbose, stdout); err != nil {
+	if err := evaluate(ctx, *configPath, *casesDir, *cacheDir, strings.Split(*catchall, ","), *lines, *verbose, stdout); err != nil {
 		fmt.Fprintf(stderr, "evals: %v\n", err)
 		return 1
 	}
 	return 0
 }
 
-func evaluate(ctx context.Context, configPath, casesDir, cacheDir string, catchall []string, verbose bool, w io.Writer) error {
+func evaluate(ctx context.Context, configPath, casesDir, cacheDir string, catchall []string, lines, verbose bool, w io.Writer) error {
 	tree, err := config.Load(".", configPath)
 	if err != nil {
 		return err
@@ -88,7 +89,7 @@ func evaluate(ctx context.Context, configPath, casesDir, cacheDir string, catcha
 		}
 		targets[i] = bouncer.Target{File: c.file, Rules: cfg.Rules, Advice: advice}
 	}
-	b := bouncer.Bouncer{Evaluator: evaluator, ChunkBytes: 1 << 20}
+	b := bouncer.Bouncer{Evaluator: evaluator, ChunkBytes: 1 << 20, Lines: lines}
 	report, err := b.Check(ctx, targets)
 	if err != nil {
 		return err

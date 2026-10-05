@@ -54,15 +54,15 @@ Or with [pre-commit](https://pre-commit.com):
 
 ## Rules
 
-There are twenty built-in rules, drawn from what people complain about in
+There are eighteen built-in rules, drawn from what people complain about in
 agent-written code:
 
 - **Errors** (the commit is turned away): debug leftovers, commented-out code,
-  secrets, swallowed errors, silent fallbacks, stubs and fake data, and code
-  special-cased for tests.
+  secrets, swallowed errors, silent fallbacks, stubs and fake data, comments
+  that narrate the code, and code special-cased for tests.
 - **Warnings** (reported, commit let in): weakened and low-value tests, `as any`,
-  lint suppressions, emoji, sleeps, blanket retries, compat shims,
-  hand-rolled stdlib, work-summary docs, and `parser_v2.py`.
+  lint suppressions, emoji, sleeps, blanket retries, compat shims, and
+  hand-rolled stdlib.
 - **`sus`**: a catch-all that warns on a hunch and rejects only when it's very
   sure. Off by default; turn it on with `--with sus`.
 
@@ -90,9 +90,9 @@ advice: |
 
 ## Does it work?
 
-`evals/` holds 101 labeled diffs, including hard negatives that look bad but
+`evals/` holds 97 labeled diffs, including hard negatives that look bad but
 aren't, and changes that advice makes fine. On Jev at the default thresholds,
-sven flags 59 of the 60 bad changes its rules name, with no false alarms. Six
+sven flags 55 of the 56 bad changes its rules name, with no false alarms. Six
 more, like an auth bypass, only `--with sus` catches. Check your own rules and
 model:
 
@@ -135,6 +135,8 @@ sven check --no emoji,sus          # turn rules off
 sven check --only hardcoded-secret # ask just these
 sven check --errors-only           # hard failures only, no warnings
 sven check --advice "Emoji are fine here."
+sven check --lines                 # show the lines behind each violation,
+                                   # dropping ones no line is behind
 sven check --parallel 32           # more requests at once
 sven check --provider typesafe     # or --model
 ```

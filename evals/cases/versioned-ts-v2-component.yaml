@@ -1,9 +1,0 @@
-path: "web/src/Checkout_v2.tsx"
-expect: [versioned-copy]
-diff: |
-  @@ -0,0 +1,7 @@
-  +import { CartSummary } from "./CartSummary";
-  +
-  +export function Checkout() {
-  +  return <CartSummary editable={false} />;
-  +}

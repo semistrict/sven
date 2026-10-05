@@ -65,6 +65,7 @@ Check options, which override .sven.yaml:
   --only rule,...                                 ask only these rules
   --errors-only                                   only hard failures; no warnings
   --advice text                                   tell the model about the code
+  --lines                                         show the lines that break each rule
   --parallel n                                    requests at once (default 8)
   --provider name, --model name                   who answers
   --config file                                   root config file
@@ -136,6 +137,7 @@ func check(ctx context.Context, args []string, stdin io.Reader, stdout, stderr i
 	patch := fs.Bool("patch", false, "judge a unified diff read from standard input")
 	all := fs.Bool("all", false, "judge every tracked file, as if newly added")
 	commit := fs.String("commit", "", "judge what one commit changed, such as HEAD or a sha")
+	lines := fs.Bool("lines", false, "show the lines that break each rule, dropping violations no line is likely to cause")
 	configPath := fs.String("config", "", "root config file (default <work tree>/"+config.FileName+")")
 	verbose := fs.Bool("v", false, "show every verdict, not just violations")
 	fs.Bool("no-color", false, "never color output (also NO_COLOR=1)")
@@ -217,6 +219,9 @@ func check(ctx context.Context, args []string, stdin io.Reader, stdout, stderr i
 		return false, nil
 	}
 
+	if *lines && tree.Provider == config.Sven {
+		return false, errors.New("--lines asks questions the free sven API doesn't answer; use your own key with --provider typesafe and TYPESAFE_API_KEY")
+	}
 	client, err := provider.New(tree.Provider, tree.Model, tree.AllowRequestStorage)
 	if err != nil {
 		return false, err
@@ -235,7 +240,7 @@ func check(ctx context.Context, args []string, stdin io.Reader, stdout, stderr i
 		prog.finish()
 		return false, err
 	}
-	b := bouncer.Bouncer{Evaluator: evaluator, ChunkBytes: chunkBytes}
+	b := bouncer.Bouncer{Evaluator: evaluator, ChunkBytes: chunkBytes, Lines: *lines}
 	if prog != nil {
 		b.Judged = prog.judged
 	}
@@ -384,12 +389,18 @@ func printVerdicts(w io.Writer, report bouncer.Report, changed map[string]diff.F
 			fmt.Fprintf(w, "  %s\n", header)
 		}
 		why := ""
-		if v.Level() != bouncer.OK {
+		switch {
+		case v.Level() != bouncer.OK:
 			why = cmp.Or(v.Rule.Violation, v.Rule.Question)
+		case v.Located:
+			why = "no line is likely to break it"
 		}
 		verdict := paint[v.Level()](fmt.Sprintf("%s %-22s", marks[v.Level()], v.Rule.ID))
 		line := fmt.Sprintf("    %s %3.0f%%  %s", verdict, v.P*100, why)
 		fmt.Fprintln(w, strings.TrimRight(line, " "))
+		for _, l := range v.Lines {
+			fmt.Fprintf(w, "      %s %s\n", p.dim(fmt.Sprintf("%5d", l.Line)), strings.TrimRight(l.Text, " \t"))
+		}
 	}
 	if len(shown) > 0 {
 		fmt.Fprintln(w)

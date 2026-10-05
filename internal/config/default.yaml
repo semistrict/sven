@@ -162,20 +162,6 @@ rules:
     violation: Standard library functionality is written out by hand.
     ok: New functions do something the standard library doesn't.
 
-  - id: work-summary
-    error: off
-    warn: 0.5
-    question: Does `diff` add a document that narrates the work done in this change, such as an implementation summary, fix report, or list of what was changed, rather than documentation the code's users need?
-    violation: A report about the change is committed as a file.
-    ok: Documentation describes how to use or maintain the code, or a changelog entry follows the project's format.
-
-  - id: versioned-copy
-    error: off
-    warn: 0.5
-    question: Is `path` a new parallel copy of another file, named with a marker such as _v2, _new, _fixed, _final, enhanced_, or improved_?
-    violation: A second version of a file is added next to the original.
-    ok: The file is edited in place, or the name follows an existing versioning convention such as api/v2/.
-
   # A catch-all for everything the rules above don't name: warn on a hunch,
   # reject only when sure. Off by default: turn it on with `sven check
   # --with sus`, or with `- {id: sus, disabled: false}` under rules.

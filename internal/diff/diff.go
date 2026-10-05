@@ -4,6 +4,7 @@ package diff
 import (
 	"bufio"
 	"io"
+	"regexp"
 	"strconv"
 	"strings"
 )
@@ -88,22 +89,48 @@ func path(s, prefix string) (string, bool) {
 	return strings.CutPrefix(s, prefix)
 }
 
+// Chunk is a piece of a file's diff.
+type Chunk struct {
+	Text string
+	// Changes are the lines Text adds and removes, in order.
+	Changes []Change
+}
+
+// Change is an added or removed line.
+type Change struct {
+	// Line is its number in the file after the change if added, or before
+	// it if removed; 0 if the hunk header doesn't say.
+	Line int
+	// Text is the line as the diff shows it, starting with + or -.
+	Text string
+}
+
+// hunkStart matches a hunk header's starting line numbers, old then new.
+var hunkStart = regexp.MustCompile(`^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@`)
+
 // Chunks renders the file's hunks as diff text split into pieces of at most
 // budget bytes, so each fits a model's context. Hunks are kept whole where
 // possible; a hunk larger than the budget is split between lines, repeating
 // its header. A single line longer than the budget gets a chunk to itself.
-func (f File) Chunks(budget int) []string {
-	var chunks []string
+func (f File) Chunks(budget int) []Chunk {
+	var chunks []Chunk
 	var b strings.Builder
+	var changes []Change
 	emit := func() {
 		if b.Len() > 0 {
-			chunks = append(chunks, b.String())
+			chunks = append(chunks, Chunk{Text: b.String(), Changes: changes})
 			b.Reset()
+			changes = nil
 		}
 	}
 	for _, h := range f.Hunks {
 		if b.Len()+hunkSize(h) > budget {
 			emit()
+		}
+		var before, after int
+		if m := hunkStart.FindStringSubmatch(h.Header); m != nil {
+			before, _ = strconv.Atoi(m[1])
+			after, _ = strconv.Atoi(m[2])
 		}
 		b.WriteString(h.Header + "\n")
 		for _, l := range h.Lines {
@@ -112,6 +139,17 @@ func (f File) Chunks(budget int) []string {
 				b.WriteString(h.Header + "\n")
 			}
 			b.WriteString(l + "\n")
+			switch {
+			case strings.HasPrefix(l, "+"):
+				changes = append(changes, Change{Line: after, Text: l})
+				after++
+			case strings.HasPrefix(l, "-"):
+				changes = append(changes, Change{Line: before, Text: l})
+				before++
+			case strings.HasPrefix(l, " "):
+				before++
+				after++
+			}
 		}
 	}
 	emit()
