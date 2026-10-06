@@ -123,7 +123,13 @@ func stage(t *testing.T, path, content string) {
 
 func typesafe(t *testing.T) *systemonetest.Server {
 	t.Helper()
-	srv := systemonetest.NewServer(t, judge)
+	return typesafeWith(t, judge)
+}
+
+// typesafeWith points sven at a fake TypeSafe API answering with j.
+func typesafeWith(t *testing.T, j systemonetest.Judge) *systemonetest.Server {
+	t.Helper()
+	srv := systemonetest.NewServer(t, j)
 	t.Setenv("SVEN_PROVIDER", "typesafe")
 	t.Setenv("TYPESAFE_API_KEY", srv.Token)
 	t.Setenv("TYPESAFE_BASE_URL", srv.URL)
@@ -745,15 +751,12 @@ func TestInterruptPrintsWhatWasJudged(t *testing.T) {
 	repo(t)
 	ctx, cancel := context.WithCancel(t.Context())
 	release := make(chan struct{})
-	srv := systemonetest.NewServer(t, func(map[string]any, string) float64 {
+	typesafeWith(t, func(map[string]any, string) float64 {
 		cancel()
 		<-release
 		return 0.02
 	})
 	t.Cleanup(func() { close(release) })
-	t.Setenv("SVEN_PROVIDER", "typesafe")
-	t.Setenv("TYPESAFE_API_KEY", srv.Token)
-	t.Setenv("TYPESAFE_BASE_URL", srv.URL)
 	stage(t, "main.go", dirty)
 
 	var out, errOut bytes.Buffer
@@ -863,4 +866,146 @@ func TestLinesNeedYourOwnKey(t *testing.T) {
 	stage(t, "main.go", dirty)
 
 	expect(t, append(staged, "--lines"), exitError, "", "sven: --lines asks questions the free sven API doesn't answer; use your own key with --provider typesafe and TYPESAFE_API_KEY\n")
+}
+
+func TestJSON(t *testing.T) {
+	repo(t)
+	typesafe(t)
+	stage(t, "main.go", dirty)
+	stage(t, "main_test.go", skipped)
+
+	expect(t, append(staged, "--json", "--lines"), exitRejected, `{
+  "verdict": "reject",
+  "checked": 2,
+  "total": 2,
+  "files": [
+    {
+      "path": "main.go",
+      "added": 1,
+      "removed": 0,
+      "verdicts": [
+        {
+          "rule": "debug-leftovers",
+          "level": "error",
+          "probability": 0.93,
+          "message": "Added lines contain temporary debugging code that was not meant to be committed.",
+          "lines": [
+            {
+              "line": 4,
+              "text": "+\tprintln(\"here\")",
+              "probability": 0.9
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": "main_test.go",
+      "added": 7,
+      "removed": 0,
+      "verdicts": [
+        {
+          "rule": "weakened-tests",
+          "level": "warn",
+          "probability": 0.8,
+          "message": "Tests are skipped, disabled, removed, or made weaker.",
+          "lines": [
+            {
+              "line": 6,
+              "text": "+\tt.Skip(\"flaky\")",
+              "probability": 0.9
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "usage": {
+    "provider": "typesafe",
+    "model": "jev-latest",
+    "input_tokens": 400,
+    "cost_usd": 0.0000168
+  }
+}
+`, "")
+}
+
+func TestJSONVerboseShowsEveryVerdict(t *testing.T) {
+	repo(t)
+	typesafe(t)
+	stage(t, "main.go", clean+"// more\n")
+
+	expect(t, append(staged, "--json", "-v", "--only", "debug-leftovers"), exitPass, `{
+  "verdict": "pass",
+  "checked": 1,
+  "total": 1,
+  "files": [
+    {
+      "path": "main.go",
+      "added": 1,
+      "removed": 0,
+      "verdicts": [
+        {
+          "rule": "debug-leftovers",
+          "level": "ok",
+          "probability": 0.02
+        }
+      ]
+    }
+  ],
+  "usage": {
+    "provider": "typesafe",
+    "model": "jev-latest",
+    "input_tokens": 100,
+    "cost_usd": 0.0000042
+  }
+}
+`, "")
+}
+
+func TestJSONNothingToCheck(t *testing.T) {
+	repo(t)
+	typesafe(t)
+
+	expect(t, append(staged, "--json"), exitPass, `{
+  "verdict": "pass",
+  "checked": 0,
+  "total": 0,
+  "files": [],
+  "note": "nothing to check: no staged changes."
+}
+`, "")
+}
+
+func TestJSONInterrupted(t *testing.T) {
+	repo(t)
+	ctx, cancel := context.WithCancel(t.Context())
+	release := make(chan struct{})
+	typesafeWith(t, func(map[string]any, string) float64 {
+		cancel()
+		<-release
+		return 0.02
+	})
+	t.Cleanup(func() { close(release) })
+	stage(t, "main.go", dirty)
+
+	var out, errOut bytes.Buffer
+	code := run(ctx, append(staged, "--json"), strings.NewReader(""), &out, &errOut)
+
+	want := `{
+  "verdict": "interrupted",
+  "checked": 0,
+  "total": 1,
+  "files": [],
+  "usage": {
+    "provider": "typesafe",
+    "model": "jev-latest",
+    "input_tokens": 0,
+    "cost_usd": 0
+  }
+}
+`
+	if code != exitInterrupted || out.String() != want || errOut.String() != "" {
+		t.Errorf("sven = %d\nstdout:\n%s\nstderr:\n%s\nwant %d\nstdout:\n%s", code, out.String(), errOut.String(), exitInterrupted, want)
+	}
 }

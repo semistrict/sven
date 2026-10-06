@@ -138,6 +138,8 @@ sven check --errors-only           # hard failures only, no warnings
 sven check --advice "Emoji are fine here."
 sven check --lines                 # show the lines behind each violation,
                                    # dropping ones no line is behind
+sven check --json                  # for tools: verdict, files, verdicts,
+                                   # lines, usage and cost
 sven check --parallel 32           # more requests at once
 sven check --provider typesafe     # or --model
 ```

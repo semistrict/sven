@@ -71,6 +71,7 @@ Check options, which override .sven.yaml:
   --provider name, --model name                   who answers
   --config file                                   root config file
   -v                                              show every verdict
+  --json                                          print the outcome as JSON
   --no-color                                      never color output
 
 Environment:
@@ -141,6 +142,7 @@ func check(ctx context.Context, args []string, stdin io.Reader, stdout, stderr i
 	lines := fs.Bool("lines", false, "show the lines that break each rule, dropping violations no line is likely to cause")
 	configPath := fs.String("config", "", "root config file (default <work tree>/"+config.FileName+")")
 	verbose := fs.Bool("v", false, "show every verdict, not just violations")
+	jsonOut := fs.Bool("json", false, "print the outcome as JSON")
 	fs.Bool("no-color", false, "never color output (also NO_COLOR=1)")
 	parallel := fs.Int("parallel", defaultParallel, "how many requests to send to the model at once")
 	providerName := fs.String("provider", "", "sven, typesafe, or cloudflare, instead of .sven.yaml's")
@@ -212,7 +214,11 @@ func check(ctx context.Context, args []string, stdin io.Reader, stdout, stderr i
 		return false, fmt.Errorf("no rule named %s; the rules are %s", strings.Join(unknown, ", "), strings.Join(tree.Known(), ", "))
 	}
 	if len(targets) == 0 {
-		fmt.Fprintln(stdout, "sven: nothing to check: "+emptyBecause(*patch, *all, *commit, diffArgs, len(files)))
+		why := emptyBecause(*patch, *all, *commit, diffArgs, len(files))
+		if *jsonOut {
+			return false, writeNothingJSON(stdout, why)
+		}
+		fmt.Fprintln(stdout, "sven: nothing to check: "+why)
 		return false, nil
 	}
 
@@ -253,20 +259,32 @@ func check(ctx context.Context, args []string, stdin io.Reader, stdout, stderr i
 	if err != nil && ctx.Err() == nil {
 		return false, err
 	}
-	// With --all, each file is judged whole, so a diffstat says nothing.
-	printVerdicts(stdout, report, diffs, !*all, *verbose, p)
-	if err != nil {
-		fmt.Fprintln(stdout, p.yellow(fmt.Sprintf("sven: interrupted after judging %d of %d files. Run again to pick up where it stopped.", report.Files, len(targets))))
+	result := outcome{report: report, total: len(targets), interrupted: err != nil, diffs: diffs, provider: tree.Provider, client: client}
+	if *jsonOut {
+		if err := writeJSON(stdout, result, *verbose); err != nil {
+			return false, err
+		}
 	} else {
-		printVerdict(stdout, report, p)
+		// With --all, each file is judged whole, so a diffstat says nothing.
+		printText(stdout, result, !*all, *verbose, p)
 	}
-	if err == nil || report.Usage.InputTokens > 0 {
-		fmt.Fprintln(stdout, p.dim("sven: "+report.Usage.Summary(client.Name())))
-	}
-	if err != nil {
+	if result.interrupted {
 		return false, errInterrupted
 	}
 	return report.Rejected(), nil
+}
+
+// printText prints a check's outcome for people.
+func printText(w io.Writer, o outcome, stat, verbose bool, p palette) {
+	printVerdicts(w, o.report, o.diffs, stat, verbose, p)
+	if o.interrupted {
+		fmt.Fprintln(w, p.yellow(fmt.Sprintf("sven: interrupted after judging %d of %d files. Run again to pick up where it stopped.", o.report.Files, o.total)))
+	} else {
+		printVerdict(w, o.report, p)
+	}
+	if !o.interrupted || o.report.Usage.InputTokens > 0 {
+		fmt.Fprintln(w, p.dim("sven: "+o.report.Usage.Summary(o.client.Name())))
+	}
 }
 
 // read returns the diff to judge: standard input with --patch, or what git
