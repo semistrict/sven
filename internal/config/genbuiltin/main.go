@@ -1,8 +1,11 @@
-// Command genbuiltin writes the built-in rules' questions to a file, for the
-// free sven API's allow-list.
+// Command genbuiltin adds the built-in rules' questions to a file, the free
+// sven API's allow-list. It never removes one, so sven installs that still
+// ask an older wording keep getting answers.
 package main
 
 import (
+	"errors"
+	"io/fs"
 	"log"
 	"os"
 
@@ -11,9 +14,13 @@ import (
 
 func main() {
 	if len(os.Args) != 2 {
-		log.Fatal("usage: genbuiltin <output file>")
+		log.Fatal("usage: genbuiltin <allow-list file>")
 	}
-	out, err := config.BuiltinQuestions()
+	old, err := os.ReadFile(os.Args[1])
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		log.Fatal(err)
+	}
+	out, err := config.AllowList(old)
 	if err != nil {
 		log.Fatal(err)
 	}

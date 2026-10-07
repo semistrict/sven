@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -294,17 +295,42 @@ func TestInheritRulesFalse(t *testing.T) {
 	}
 }
 
-func TestWorkerAllowListIsCurrent(t *testing.T) {
-	want, err := BuiltinQuestions()
-	if err != nil {
-		t.Fatal(err)
-	}
+func TestWorkerAllowsEveryBuiltinQuestion(t *testing.T) {
 	got, err := os.ReadFile("../../worker/src/builtin.json")
 	if err != nil {
 		t.Fatal(err)
 	}
+	want, err := AllowList(got)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if string(got) != string(want) {
-		t.Error("worker/src/builtin.json is stale: run go generate ./internal/config")
+		t.Error("worker/src/builtin.json lacks built-in questions: run go generate ./internal/config")
+	}
+}
+
+func TestAllowListKeepsOldQuestions(t *testing.T) {
+	old := `[{"criteria":{"true":"Yes."},"instructions":"An old wording?","type":"noul"}]`
+
+	out, err := AllowList([]byte(old))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var got []map[string]any
+	if err := json.Unmarshal(out, &got); err != nil {
+		t.Fatal(err)
+	}
+	builtin, err := BuiltinQuestions()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1+len(builtin) || got[0]["instructions"] != "An old wording?" {
+		t.Errorf("allow-list has %d questions, first %v; want the old one first, then %d built-in", len(got), got[0], len(builtin))
+	}
+	again, err := AllowList(out)
+	if err != nil || string(again) != string(out) {
+		t.Errorf("AllowList is not idempotent: %v", err)
 	}
 }
 
