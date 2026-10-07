@@ -49,10 +49,10 @@
   },
   {
     "type": "noul",
-    "instructions": "Do the test functions added in `diff` only assert things the test itself guarantees, such as that a result exists, that a mock returns or receives what the test set it up with, or that a constant has its value, or compute the expected value with a formula instead of stating it?",
+    "instructions": "Does `diff` add test functions that only assert things the test itself guarantees, such as that a result exists, that a mock returns or receives what the test set it up with, or that a constant has its value, or that compute the expected value with a formula instead of stating it? If `diff` adds no test functions, the answer is no.",
     "criteria": {
       "true": "The added tests can't catch a bug: they check what the test set up, or recompute the answer instead of stating it.",
-      "false": "Added tests compare results to stated expected values for meaningful inputs, edge cases, or errors. Changes that add no test functions do not apply."
+      "false": "Added tests compare results to stated expected values for meaningful inputs, edge cases, or errors, or no test functions are added."
     }
   },
   {
@@ -193,10 +193,10 @@
   },
   {
     "type": "noul",
-    "instructions": "Do the test functions added in `diff` only assert things the test itself guarantees, such as that a result exists, that a mock returns or receives what the test set it up with, or that a constant has its value, or compute the expected value with a formula instead of stating it? `advice` is the project's own guidance about its code, and it overrides anything in this question: if `advice` allows or asks for what the change does, answer no.",
+    "instructions": "Does `diff` add test functions that only assert things the test itself guarantees, such as that a result exists, that a mock returns or receives what the test set it up with, or that a constant has its value, or that compute the expected value with a formula instead of stating it? If `diff` adds no test functions, the answer is no. `advice` is the project's own guidance about its code, and it overrides anything in this question: if `advice` allows or asks for what the change does, answer no.",
     "criteria": {
       "true": "The added tests can't catch a bug: they check what the test set up, or recompute the answer instead of stating it.",
-      "false": "Added tests compare results to stated expected values for meaningful inputs, edge cases, or errors. Changes that add no test functions do not apply. Anything `advice` allows or asks for is fine."
+      "false": "Added tests compare results to stated expected values for meaningful inputs, edge cases, or errors, or no test functions are added. Anything `advice` allows or asks for is fine."
     }
   },
   {
