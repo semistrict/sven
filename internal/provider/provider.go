@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/semistrict/sven/internal/config"
 	"github.com/semistrict/sven/systemone"
@@ -50,8 +51,17 @@ func New(provider, model string, allowRequestStorage bool) (*systemone.Client, e
 			opts = append(opts, systemone.WithBaseURL(url))
 		}
 		return systemone.Cloudflare(account, token, opts...), nil
+	case config.OpenAI:
+		key, err := env("OPENAI_API_KEY")
+		if err != nil {
+			return nil, err
+		}
+		if url := os.Getenv("OPENAI_BASE_URL"); url != "" {
+			opts = append(opts, systemone.WithBaseURL(url))
+		}
+		return systemone.OpenAI(key, opts...), nil
 	}
-	return nil, fmt.Errorf("unknown provider %q: want %s, %s, or %s", provider, config.Sven, config.TypeSafe, config.Cloudflare)
+	return nil, fmt.Errorf("unknown provider %q: want %s", provider, strings.Join(config.Providers, ", "))
 }
 
 func env(name string) (string, error) {

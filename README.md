@@ -23,8 +23,9 @@ Coding agents leave the same mess every time: `fmt.Println("got here")`,
 but it takes seconds and real money per commit.
 
 sven asks a System One model instead: TypeSafe's
-[Jev](https://docs.typesafe.ai) or Cloudflare's
-[Clef](https://developers.cloudflare.com/workers-ai/models/clef-flash/). 
+[Jev](https://docs.typesafe.ai), OpenAI's gpt-6-luna through its
+[Decisions API](https://developers.openai.com/api/docs/guides/decisions), or
+Cloudflare's [Clef](https://developers.cloudflare.com/workers-ai/models/clef-flash/).
 
 ## Install
 
@@ -41,7 +42,8 @@ Don't want to share your data with us? Bring your own key, then nothing is sent 
 
 ```yaml
 # .sven.yaml
-provider: typesafe   # with TYPESAFE_API_KEY, or cloudflare with CLOUDFLARE_* keys
+provider: typesafe   # with TYPESAFE_API_KEY; or openai with OPENAI_API_KEY,
+                     # or cloudflare with CLOUDFLARE_* keys
 ```
 
 Or with [pre-commit](https://pre-commit.com):

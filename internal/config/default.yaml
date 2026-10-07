@@ -21,15 +21,17 @@
 # sven: the free sven API, which runs Jev and needs no key. It answers only
 #   the built-in rules, and stores what it's sent, encrypted.
 # typesafe: TypeSafe Jev, needs TYPESAFE_API_KEY.
+# openai: OpenAI's Decisions API with gpt-6-luna, needs OPENAI_API_KEY.
 # cloudflare: Cloudflare Clef, needs CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN.
 provider: sven
 
 # The free sven API stores the requests and responses it handles, encrypted,
 # so it only runs for projects that agree to that. `sven init` asks. If you'd
-# rather not, use your own key with provider: typesafe or cloudflare.
+# rather not, use your own key with provider: typesafe, openai or cloudflare.
 # allow_request_storage: true
 
-# Defaults to jev-latest for typesafe and clef-flash for cloudflare.
+# Defaults to jev-latest for typesafe, gpt-6-luna for openai, and clef-flash
+# for cloudflare.
 # model: jev-latest
 
 # Default thresholds for rules that don't set their own: a probability from

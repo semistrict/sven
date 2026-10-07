@@ -372,3 +372,39 @@ func TestCacheIgnoresItself(t *testing.T) {
 		t.Errorf(".gitignore = %q, %v", got, err)
 	}
 }
+
+// refuser declines every question, as OpenAI does one that doesn't apply.
+type refuser struct{ asked int }
+
+func (r *refuser) Evaluate(_ context.Context, _ any, questions map[string]systemone.Question) (*systemone.Response, error) {
+	r.asked++
+	resp := &systemone.Response{Answers: map[string]systemone.Answer{}}
+	for id := range questions {
+		resp.Answers[id] = systemone.Answer{Type: systemone.KindRefusal}
+	}
+	return resp, nil
+}
+
+func TestRefusalsAreRememberedAsNo(t *testing.T) {
+	dir := t.TempDir()
+	r := &refuser{}
+	for range 2 {
+		e, err := Open(dir, "luna", r)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp, err := e.Evaluate(t.Context(), state, questions)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := e.Close(); err != nil {
+			t.Fatal(err)
+		}
+		if got := resp.Answers["debug"]; got.Noul != 0 {
+			t.Errorf("debug = %+v, want 0", got)
+		}
+	}
+	if r.asked != 1 {
+		t.Errorf("asked %d times, want 1", r.asked)
+	}
+}

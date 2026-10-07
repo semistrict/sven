@@ -6,8 +6,9 @@ import (
 )
 
 // pricePerMillion is the list price in US dollars per million input tokens;
-// output tokens are free. Sources: docs.typesafe.ai/models and
-// developers.cloudflare.com/workers-ai/models, as of October 2026.
+// output tokens are free. Sources: docs.typesafe.ai/models,
+// developers.cloudflare.com/workers-ai/models and
+// developers.openai.com/api/docs/guides/decisions, as of October 2026.
 var pricePerMillion = []struct {
 	prefix string
 	usd    float64
@@ -15,6 +16,7 @@ var pricePerMillion = []struct {
 	{"jev", 0.042},
 	{"clef-flash", 0.09},
 	{"clef", 0.24},
+	{"gpt-6-luna", 0.10},
 }
 
 // Cost returns what usage costs on model in US dollars, and false if the

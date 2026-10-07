@@ -76,6 +76,7 @@ Check options, which override .sven.yaml:
 
 Environment:
   TYPESAFE_API_KEY                                for provider typesafe (Jev)
+  OPENAI_API_KEY                                  for provider openai (gpt-6-luna)
   CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN     for provider cloudflare (Clef)
   SVEN_PROVIDER, SVEN_MODEL                       override .sven.yaml
   NO_COLOR, CLICOLOR_FORCE                        turn color off, or on when piped
@@ -145,7 +146,7 @@ func check(ctx context.Context, args []string, stdin io.Reader, stdout, stderr i
 	jsonOut := fs.Bool("json", false, "print the outcome as JSON")
 	fs.Bool("no-color", false, "never color output (also NO_COLOR=1)")
 	parallel := fs.Int("parallel", defaultParallel, "how many requests to send to the model at once")
-	providerName := fs.String("provider", "", "sven, typesafe, or cloudflare, instead of .sven.yaml's")
+	providerName := fs.String("provider", "", "sven, typesafe, openai, or cloudflare, instead of .sven.yaml's")
 	model := fs.String("model", "", "the model to ask, instead of .sven.yaml's")
 	var o config.Overrides
 	fs.Var((*ruleList)(&o.With), "with", "turn rules on, such as ones off by default: --with sus")
@@ -576,7 +577,7 @@ func initConfig(ctx context.Context, args []string, stdin io.Reader, stdout, std
 	content := config.Starter(*allow)
 	next := "the free sven API will check this project's changes"
 	if !*allow {
-		next = "set TYPESAFE_API_KEY, or change provider to cloudflare"
+		next = "set TYPESAFE_API_KEY, or change provider to openai or cloudflare"
 	}
 	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
 	if err != nil {

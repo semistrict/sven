@@ -288,10 +288,10 @@ func TestAPIErrorFailsTheCheck(t *testing.T) {
 func TestInvalidConfig(t *testing.T) {
 	dir := repo(t)
 	typesafe(t)
-	write(t, config.FileName, "provider: openai\n")
+	write(t, config.FileName, "provider: gemini\n")
 	stage(t, "main.go", dirty)
 
-	expect(t, staged, exitError, "", "sven: "+filepath.Join(dir, config.FileName)+": provider \"openai\": want sven, typesafe, or cloudflare\n")
+	expect(t, staged, exitError, "", "sven: "+filepath.Join(dir, config.FileName)+": provider \"gemini\": want sven, typesafe, openai, cloudflare\n")
 }
 
 // freeAPI points the sven provider at a fake server that needs no key.
@@ -329,7 +329,7 @@ func TestInitDecliningStorage(t *testing.T) {
 	dir := repo(t)
 	path := filepath.Join(dir, config.FileName)
 
-	expectWithInput(t, "\n", []string{"init"}, exitPass, consentPrompt+"sven: wrote "+path+": set TYPESAFE_API_KEY, or change provider to cloudflare\n", "")
+	expectWithInput(t, "\n", []string{"init"}, exitPass, consentPrompt+"sven: wrote "+path+": set TYPESAFE_API_KEY, or change provider to openai or cloudflare\n", "")
 
 	got, err := os.ReadFile(path)
 	if err != nil {

@@ -121,7 +121,9 @@ func (e *Evaluator) Evaluate(ctx context.Context, state any, questions map[strin
 	for id := range missing {
 		a := fresh.Answers[id]
 		resp.Answers[id] = a
-		if k, ok := keys[id]; ok && a.Type == systemone.KindNoul {
+		// A refusal leaves Noul 0, and is remembered as that: for a yes/no
+		// question, declining to answer is no.
+		if k, ok := keys[id]; ok && (a.Type == systemone.KindNoul || a.Type == systemone.KindRefusal) {
 			e.use(k, a.Noul)
 		}
 	}

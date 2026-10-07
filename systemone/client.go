@@ -48,8 +48,15 @@ type Client struct {
 	http        *http.Client
 	maxAttempts int
 	backoff     time.Duration
-	// enveloped marks responses wrapped in Cloudflare's REST envelope.
-	enveloped bool
+	protocol    protocol
+}
+
+// protocol is how one provider's API is spoken.
+type protocol interface {
+	// encode renders a request.
+	encode(model string, state any, questions map[string]Question) ([]byte, error)
+	// decode reads a response that came back with a 2xx status.
+	decode(status int, raw []byte) (*Response, error)
 }
 
 type options struct {
@@ -71,14 +78,14 @@ func WithHTTPClient(c *http.Client) Option { return func(o *options) { o.httpCli
 // TypeSafe returns a client for TypeSafe's API, which serves Jev.
 func TypeSafe(apiKey string, opts ...Option) *Client {
 	o := resolve(opts, TypeSafeBaseURL, TypeSafeDefaultModel)
-	return newClient(o, o.baseURL+"/v1/systemone", apiKey, false)
+	return newClient(o, o.baseURL+"/v1/systemone", apiKey, systemOne{})
 }
 
 // Sven returns a client for the free sven API, which needs no key. Creating
 // one is agreeing that the API stores the requests and responses it handles.
 func Sven(opts ...Option) *Client {
 	o := resolve(opts, SvenBaseURL, TypeSafeDefaultModel)
-	c := newClient(o, o.baseURL+"/v1/systemone", "", false)
+	c := newClient(o, o.baseURL+"/v1/systemone", "", systemOne{})
 	c.name = SvenName
 	c.header.Set(SvenConsentHeader, SvenConsent)
 	return c
@@ -87,7 +94,7 @@ func Sven(opts ...Option) *Client {
 // Cloudflare returns a client for Cloudflare Workers AI, which serves Clef.
 func Cloudflare(accountID, apiToken string, opts ...Option) *Client {
 	o := resolve(opts, CloudflareBaseURL, CloudflareDefaultModel)
-	return newClient(o, fmt.Sprintf("%s/accounts/%s/ai/run/@cf/cloudflare/%s", o.baseURL, accountID, o.model), apiToken, true)
+	return newClient(o, fmt.Sprintf("%s/accounts/%s/ai/run/@cf/cloudflare/%s", o.baseURL, accountID, o.model), apiToken, systemOne{enveloped: true})
 }
 
 func resolve(opts []Option, baseURL, model string) options {
@@ -99,7 +106,7 @@ func resolve(opts []Option, baseURL, model string) options {
 	return o
 }
 
-func newClient(o options, url, token string, enveloped bool) *Client {
+func newClient(o options, url, token string, p protocol) *Client {
 	return &Client{
 		url:         url,
 		token:       token,
@@ -109,7 +116,7 @@ func newClient(o options, url, token string, enveloped bool) *Client {
 		http:        o.httpClient,
 		maxAttempts: defaultMaxAttempts,
 		backoff:     defaultBackoff,
-		enveloped:   enveloped,
+		protocol:    p,
 	}
 }
 
@@ -123,9 +130,9 @@ func (c *Client) Name() string { return c.name }
 func (c *Client) Endpoint() string { return c.url }
 
 // Evaluate asks every question about state in one round trip. Every question
-// is guaranteed an answer of its own kind.
+// is guaranteed an answer of its own kind, or a refusal.
 func (c *Client) Evaluate(ctx context.Context, state any, questions map[string]Question) (*Response, error) {
-	body, err := json.Marshal(request{Model: c.model, State: state, Questions: questions})
+	body, err := c.protocol.encode(c.model, state, questions)
 	if err != nil {
 		return nil, fmt.Errorf("encoding request: %w", err)
 	}
@@ -168,7 +175,40 @@ func (c *Client) post(ctx context.Context, body []byte) (*Response, error) {
 	if err != nil {
 		return nil, fmt.Errorf("reading response: %w", err)
 	}
-	return c.decode(httpResp, raw)
+	if httpResp.StatusCode/100 != 2 {
+		apiErr := &APIError{Status: httpResp.StatusCode, Message: summarize(raw)}
+		if s, err := strconv.Atoi(httpResp.Header.Get("Retry-After")); err == nil {
+			apiErr.RetryAfter = time.Duration(s) * time.Second
+		}
+		return nil, apiErr
+	}
+	return c.protocol.decode(httpResp.StatusCode, raw)
+}
+
+// systemOne is TypeSafe's protocol, which Cloudflare also speaks, wrapping
+// responses in its REST envelope.
+type systemOne struct{ enveloped bool }
+
+func (systemOne) encode(model string, state any, questions map[string]Question) ([]byte, error) {
+	return json.Marshal(request{Model: model, State: state, Questions: questions})
+}
+
+func (p systemOne) decode(status int, raw []byte) (*Response, error) {
+	if p.enveloped {
+		var env envelope
+		if err := json.Unmarshal(raw, &env); err != nil {
+			return nil, fmt.Errorf("decoding response envelope: %w: %s", err, summarize(raw))
+		}
+		if !env.Success {
+			return nil, &APIError{Status: status, Message: env.message()}
+		}
+		raw = env.Result
+	}
+	var resp Response
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		return nil, fmt.Errorf("decoding response: %w: %s", err, summarize(raw))
+	}
+	return &resp, nil
 }
 
 // envelope wraps every Cloudflare REST response.
@@ -189,38 +229,13 @@ func (e envelope) message() string {
 	return strings.Join(msgs, "; ")
 }
 
-func (c *Client) decode(httpResp *http.Response, raw []byte) (*Response, error) {
-	if httpResp.StatusCode/100 != 2 {
-		apiErr := &APIError{Status: httpResp.StatusCode, Message: summarize(raw)}
-		if s, err := strconv.Atoi(httpResp.Header.Get("Retry-After")); err == nil {
-			apiErr.RetryAfter = time.Duration(s) * time.Second
-		}
-		return nil, apiErr
-	}
-	if c.enveloped {
-		var env envelope
-		if err := json.Unmarshal(raw, &env); err != nil {
-			return nil, fmt.Errorf("decoding response envelope: %w: %s", err, summarize(raw))
-		}
-		if !env.Success {
-			return nil, &APIError{Status: httpResp.StatusCode, Message: env.message()}
-		}
-		raw = env.Result
-	}
-	var resp Response
-	if err := json.Unmarshal(raw, &resp); err != nil {
-		return nil, fmt.Errorf("decoding response: %w: %s", err, summarize(raw))
-	}
-	return &resp, nil
-}
-
 func check(resp *Response, questions map[string]Question) error {
 	for id, q := range questions {
 		a, ok := resp.Answers[id]
 		if !ok {
 			return fmt.Errorf("response has no answer for question %q", id)
 		}
-		if a.Type != q.Kind() {
+		if a.Type != q.Kind() && a.Type != KindRefusal {
 			return fmt.Errorf("question %q is a %s but its answer is a %s", id, q.Kind(), a.Type)
 		}
 	}

@@ -240,7 +240,7 @@ func TestNestedProviderIsAnError(t *testing.T) {
 
 func TestInvalid(t *testing.T) {
 	for _, tc := range []struct{ name, yaml, err string }{
-		{"provider", "provider: openai", `provider "openai": want sven, typesafe, or cloudflare`},
+		{"provider", "provider: gemini", `provider "gemini": want sven, typesafe, openai, cloudflare`},
 		{"threshold", "error: 1.5", "line 1: threshold 1.5: want more than 0 and at most 1, or off"},
 		{"threshold word", "warn: never", "line 1: threshold never: want more than 0 and at most 1, or off"},
 		{"unknown field", "threshold: 0.5", "yaml: unmarshal errors:\n  line 1: field threshold not found in type config.layer"},

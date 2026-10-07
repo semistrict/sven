@@ -239,6 +239,7 @@ func (b Bouncer) Check(ctx context.Context, targets []Target) (Report, error) {
 			mu.Lock()
 			usage = usage.Add(resp.Usage)
 			for r, rule := range t.Rules {
+				// A refusal, a question that doesn't apply, leaves Noul 0.
 				p := resp.Answers[rule.ID].Noul
 				found[j.target][j.chunk][r] = p
 				worst[j.target][r] = max(worst[j.target][r], p)

@@ -33,6 +33,9 @@ import (
 // FileName is the name of sven's config file in any directory.
 const FileName = ".sven.yaml"
 
+// Providers lists the providers a config may name.
+var Providers = []string{Sven, TypeSafe, OpenAI, Cloudflare}
+
 // Default is the built-in config.
 //
 //go:embed default.yaml
@@ -46,8 +49,9 @@ const freeAPI = "provider: sven\nallow_request_storage: true\n"
 
 // ownKey replaces freeAPI for projects that don't let the free sven API
 // store their requests.
-const ownKey = `# Uses your own key: set TYPESAFE_API_KEY. Or use provider: cloudflare,
-# with CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN.
+const ownKey = `# Uses your own key: set TYPESAFE_API_KEY. Or use provider: openai, with
+# OPENAI_API_KEY, or provider: cloudflare, with CLOUDFLARE_ACCOUNT_ID and
+# CLOUDFLARE_API_TOKEN.
 provider: typesafe
 `
 
@@ -65,6 +69,7 @@ const (
 	Sven       = "sven"
 	TypeSafe   = "typesafe"
 	Cloudflare = "cloudflare"
+	OpenAI     = "openai"
 
 	// maxRules is the most questions Cloudflare accepts in one request.
 	maxRules = 64
@@ -383,8 +388,8 @@ func (l *layer) validate(nested bool) error {
 	if nested && (l.Provider != "" || l.Model != "" || l.AllowRequestStorage) {
 		return fmt.Errorf("provider, model, and allow_request_storage can only be set in the root %s", FileName)
 	}
-	if l.Provider != "" && l.Provider != Sven && l.Provider != TypeSafe && l.Provider != Cloudflare {
-		return fmt.Errorf("provider %q: want %s, %s, or %s", l.Provider, Sven, TypeSafe, Cloudflare)
+	if l.Provider != "" && !slices.Contains(Providers, l.Provider) {
+		return fmt.Errorf("provider %q: want %s", l.Provider, strings.Join(Providers, ", "))
 	}
 	for _, glob := range l.Exclude {
 		if err := checkGlob(glob); err != nil {

@@ -1,6 +1,7 @@
 // Package systemone is a client for the System One API: a state and a set of
 // typed questions go in, calibrated answers come out. TypeSafe defined the
-// protocol for Jev; Cloudflare's Clef models speak it too.
+// protocol for Jev; Cloudflare's Clef models speak it too, and OpenAI's
+// Decisions API asks the same questions in a protocol of its own.
 package systemone
 
 import "encoding/json"
@@ -12,6 +13,9 @@ const (
 	KindNoul   Kind = "noul"
 	KindChoice Kind = "choice"
 	KindScore  Kind = "score"
+	// KindRefusal answers a question the model declined to answer, as
+	// OpenAI's does when a question doesn't apply. It has no fields set.
+	KindRefusal Kind = "refusal"
 )
 
 // Question is one typed question. Instructions and criteria may be strings or

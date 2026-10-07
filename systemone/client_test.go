@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -248,13 +249,14 @@ func TestCost(t *testing.T) {
 		{"jev-1.13.0", 0.084},
 		{"clef-flash", 0.18},
 		{"clef", 0.48},
+		{"gpt-6-luna", 0.2},
 	} {
 		if got, ok := Cost(tc.model, usage); !ok || got != tc.want {
 			t.Errorf("Cost(%s) = %v, %v; want %v", tc.model, got, ok, tc.want)
 		}
 	}
-	if _, ok := Cost("gpt-6-luna", usage); ok {
-		t.Error("Cost(gpt-6-luna) is known, want unknown")
+	if _, ok := Cost("mystery-1", usage); ok {
+		t.Error("Cost(mystery-1) is known, want unknown")
 	}
 }
 
@@ -265,7 +267,7 @@ func TestUsageSummary(t *testing.T) {
 		want  string
 	}{
 		{Usage{InputTokens: 183_400}, "jev-latest", "183400 input tokens on jev-latest, $0.007703"},
-		{Usage{InputTokens: 1_000}, "gpt-6-luna", "1000 input tokens on gpt-6-luna"},
+		{Usage{InputTokens: 1_000}, "mystery-1", "1000 input tokens on mystery-1"},
 		{Usage{}, "clef-flash", "every answer came from the cache, $0"},
 	} {
 		if got := tc.usage.Summary(tc.model); got != tc.want {
@@ -288,5 +290,90 @@ func TestSvenSendsConsentAndNoKey(t *testing.T) {
 	}
 	if c.Name() != "the free sven API" {
 		t.Errorf("Name = %q", c.Name())
+	}
+}
+
+// Response bodies are what OpenAI's Decisions API returned in October 2026.
+const (
+	openAIPredicateResponse = `{"model":"gpt-6-luna","answers":[{"type":"predicate","name":"debug","probability":1.0},{"type":"predicate","name":"emoji","probability":0.0}],"usage":{"input_tokens":350,"input_tokens_details":{"cached_tokens":0,"cache_write_tokens":0},"output_tokens":0,"output_tokens_details":{"reasoning_tokens":0},"total_tokens":350}}`
+	openAIMixedResponse     = `{"model":"gpt-6-luna","answers":[{"type":"choice","name":"department","choice":"billing","probabilities":[{"value":"billing","probability":0.97},{"value":"technical","probability":0.03},{"value":"sales","probability":0.0}],"confidence":0.96},{"type":"score","name":"frustration","score":1.03,"probabilities":[{"value":0,"label":"Calm","probability":0.0},{"value":1,"label":"Frustrated","probability":0.97},{"value":2,"label":"Very angry","probability":0.03}],"confidence":0.96}],"usage":{"input_tokens":251,"output_tokens":0,"total_tokens":251}}`
+)
+
+func TestOpenAIRequest(t *testing.T) {
+	srv, got := serve(t, http.StatusOK, openAIPredicateResponse, nil)
+	c := OpenAI("oa-key", WithBaseURL(srv.URL+"/v1/"))
+
+	resp, err := c.Evaluate(t.Context(), map[string]string{"path": "main.go", "diff": "+\tprintln(\"here\")\n"}, map[string]Question{
+		"emoji": Noul{Instructions: "Do the lines added in `diff` put emoji in output?"},
+		"debug": Noul{Instructions: "Does `diff` add debug prints?", True: "A print is left in.", False: "No prints."},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := (*got)[0]
+	if req.path != "/v1/decisions" || req.auth != "Bearer oa-key" || req.contentType != "application/json" {
+		t.Errorf("request = %s auth=%q type=%q", req.path, req.auth, req.contentType)
+	}
+	if got, want := req.body["input"], "<diff>\n+\tprintln(\"here\")\n</diff>\n<path>\nmain.go\n</path>\n"; got != want {
+		t.Errorf("input = %q\nwant    %q", got, want)
+	}
+	if got := req.body["model"]; got != "gpt-6-luna" {
+		t.Errorf("model = %v", got)
+	}
+	want := `[{"instructions":"Does ` + "`diff`" + ` add debug prints?\nYes means: A print is left in.\nNo means: No prints.","name":"debug","type":"predicate"},{"instructions":"Do the lines added in ` + "`diff`" + ` put emoji in output?","name":"emoji","type":"predicate"}]`
+	if b, _ := json.Marshal(req.body["questions"]); string(b) != want {
+		t.Errorf("questions = %s\nwant        %s", b, want)
+	}
+	wantResp := &Response{Model: "gpt-6-luna", Usage: Usage{InputTokens: 350}, Answers: map[string]Answer{
+		"debug": {Type: KindNoul, Noul: 1},
+		"emoji": {Type: KindNoul, Noul: 0},
+	}}
+	if !reflect.DeepEqual(resp, wantResp) {
+		t.Errorf("response = %+v, want %+v", resp, wantResp)
+	}
+}
+
+func TestOpenAIChoiceAndScore(t *testing.T) {
+	srv, got := serve(t, http.StatusOK, openAIMixedResponse, nil)
+	c := OpenAI("k", WithBaseURL(srv.URL))
+
+	resp, err := c.Evaluate(t.Context(), "Help! My payouts have been failing for 3 days.", map[string]Question{
+		"department": Choice{Instructions: "Which team should handle this?", Options: map[string]any{
+			"billing": "Payments, invoicing, refunds", "technical": nil, "sales": "Pricing",
+		}},
+		"frustration": Score{Instructions: "How frustrated is the customer?", Levels: []any{"Calm", "Frustrated", "Very angry"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := `[{"choices":[{"description":"Payments, invoicing, refunds","value":"billing"},{"description":"Pricing","value":"sales"},{"value":"technical"}],"instructions":"Which team should handle this?","name":"department","type":"choice"},{"instructions":"How frustrated is the customer?","levels":[{"label":"Calm"},{"label":"Frustrated"},{"label":"Very angry"}],"name":"frustration","type":"score"}]`
+	if b, _ := json.Marshal((*got)[0].body["questions"]); string(b) != want {
+		t.Errorf("questions = %s\nwant        %s", b, want)
+	}
+	if got := (*got)[0].body["input"]; got != "Help! My payouts have been failing for 3 days." {
+		t.Errorf("input = %q", got)
+	}
+	dept, frus := resp.Answers["department"], resp.Answers["frustration"]
+	if dept.Type != KindChoice || dept.Choice != "billing" || dept.Probabilities["technical"] != 0.03 || dept.Confidence != 0.96 {
+		t.Errorf("department = %+v", dept)
+	}
+	if frus.Type != KindScore || frus.Score != 1.03 || frus.Legend["2"] != "Very angry" || frus.Probabilities["1"] != 0.97 || frus.Confidence != 0.96 {
+		t.Errorf("frustration = %+v", frus)
+	}
+}
+
+func TestOpenAIRefusal(t *testing.T) {
+	srv, _ := serve(t, http.StatusOK, `{"model":"gpt-6-luna","answers":[{"type":"refusal","name":"q"},{"type":"predicate","name":"p","probability":0.7}],"usage":{"input_tokens":10}}`, nil)
+	c := OpenAI("k", WithBaseURL(srv.URL))
+
+	resp, err := c.Evaluate(t.Context(), "state", map[string]Question{"q": Noul{Instructions: "?"}, "p": Noul{Instructions: "!"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if q, p := resp.Answers["q"], resp.Answers["p"]; q.Type != KindRefusal || q.Noul != 0 || p.Noul != 0.7 {
+		t.Errorf("answers = %+v, %+v; want a refusal, and 0.7", q, p)
 	}
 }
